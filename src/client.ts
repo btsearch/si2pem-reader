@@ -54,6 +54,7 @@ export type FindLaboratoryReportsRequest = {
   stationIdentity: string;
   laboratoryName?: string;
   count?: number;
+  bbox?: [number, number, number, number];
 };
 
 function buildRestUrl(endpoint: string, params: Record<string, string | number | undefined>): URL {
@@ -178,6 +179,7 @@ export class SI2PEMClient {
     const stationIdentity = escapeCqlLiteral(request.stationIdentity);
     const features = await this.getFeatures({
       typeName: SI2PEM_WFS_FEATURE_TYPES.allMeasures,
+      bbox: request.bbox,
       count: request.count ?? 100,
       sortBy: "date D",
       cqlFilter: `identity_names = '${stationIdentity}' AND url IS NOT NULL AND measure_type='lab'`,

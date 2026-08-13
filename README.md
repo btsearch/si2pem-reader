@@ -36,6 +36,7 @@ const map = await si2pem.getWmsMap({
 ```ts
 const report = await si2pem.getLatestLaboratoryReport({
   stationIdentity: "PIE9503",
+  bbox: [19.8, 50.0, 20.2, 50.2],
 });
 
 const antennas = await report?.readAntennas();

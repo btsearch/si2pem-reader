@@ -103,9 +103,11 @@ function properties(overrides: Record<string, unknown>) {
 
 void test("deduplicates, sorts, and filters laboratory reports", async () => {
   let requests = 0;
+  let requestedUrl: URL | undefined;
   const client = new SI2PEMClient({
-    fetch: async () => {
+    fetch: async (input) => {
       requests += 1;
+      requestedUrl = new URL(String(input));
       return jsonResponse({
         type: "FeatureCollection",
         features: [
@@ -122,6 +124,7 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
   const reports = await client.findLaboratoryReports({
     stationIdentity: "PIE9503",
     laboratoryName: "Lab A",
+    bbox: [19.8, 50, 20.2, 50.2],
   });
   assert.deepEqual(
     reports.map((report) => report.url),
@@ -136,7 +139,26 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
     identityNames: "PIE9503",
     year: 2024,
   });
+  assert.equal(requestedUrl?.searchParams.get("bbox"), "19.8,50,20.2,50.2,EPSG:4326");
   assert.equal(requests, 1);
+});
+
+void test("forwards bbox when finding the latest laboratory report", async () => {
+  let requestedUrl: URL | undefined;
+  const client = new SI2PEMClient({
+    fetch: async (input) => {
+      requestedUrl = new URL(String(input));
+      return jsonResponse({ type: "FeatureCollection", features: [] });
+    },
+  });
+
+  const report = await client.getLatestLaboratoryReport({
+    stationIdentity: "PIE9503",
+    bbox: [19.8, 50, 20.2, 50.2],
+  });
+  assert.equal(report, null);
+  assert.equal(requestedUrl?.searchParams.get("bbox"), "19.8,50,20.2,50.2,EPSG:4326");
+  assert.equal(requestedUrl?.searchParams.get("count"), "10");
 });
 
 void test("reads antennas directly from a laboratory report", async () => {
