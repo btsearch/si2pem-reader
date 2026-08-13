@@ -1,6 +1,6 @@
 {
   "name": "si2pem-reader",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Reader for SI2PEM WFS, WMS, public REST data, and laboratory PDF reports",
   "keywords": [
     "antenna",
@@ -53,7 +53,7 @@
     "check-types": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint",
     "fmt": "oxfmt",
-    "test": "node --test --test-isolation=none --experimental-strip-types \"test/*.test.ts\"",
+    "test": "node --test --test-isolation=none --experimental-strip-types test/*.test.ts",
     "prepack": "npm run build"
   },
   "dependencies": {

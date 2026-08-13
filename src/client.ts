@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_PDF_BYTES, SI2PEM_ENDPOINTS, SI2PEM_WFS_FEATURE_TYPES } from "./constants.ts";
+import { DEFAULT_MAX_PDF_BYTES, SI2PEM_ENDPOINTS, SI2PEM_WMS_LAYERS } from "./constants.ts";
 import { si2pemDateToISO } from "./dates.ts";
 import { SI2PEMError, SI2PEM_ERROR_CODES } from "./errors.ts";
 import { createHttpClient } from "./http.ts";
@@ -13,6 +13,7 @@ import type {
   SI2PEMInstallation,
   SI2PEMLaboratoryReport,
   SI2PEMLaboratoryReportData,
+  SI2PEMMeasureProperties,
   SI2PEMPaginatedResponse,
   SI2PEMPlannedMeasurement,
 } from "./types.ts";
@@ -54,7 +55,7 @@ export type FindLaboratoryReportsRequest = {
   stationIdentity: string;
   laboratoryName?: string;
   count?: number;
-  bbox?: [number, number, number, number];
+  bbox: [number, number, number, number];
 };
 
 function buildRestUrl(endpoint: string, params: Record<string, string | number | undefined>): URL {
@@ -177,12 +178,12 @@ export class SI2PEMClient {
 
   async findLaboratoryReports(request: FindLaboratoryReportsRequest): Promise<SI2PEMLaboratoryReport[]> {
     const stationIdentity = escapeCqlLiteral(request.stationIdentity);
-    const features = await this.getFeatures({
-      typeName: SI2PEM_WFS_FEATURE_TYPES.allMeasures,
+    const features = await this.getWmsFeatureInfo<SI2PEMMeasureProperties>({
+      layer: SI2PEM_WMS_LAYERS.measurementResults,
       bbox: request.bbox,
-      count: request.count ?? 100,
-      sortBy: "date D",
-      cqlFilter: `identity_names = '${stationIdentity}' AND url IS NOT NULL AND measure_type='lab'`,
+      featureCount: request.count ?? 100,
+      sortBy: "year D,date D",
+      cqlFilter: `identity_names='${stationIdentity}' AND url IS NOT NULL AND measure_type='lab'`,
     });
     const reports = features.features.flatMap((feature) => {
       const properties = feature.properties;

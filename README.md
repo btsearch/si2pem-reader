@@ -33,10 +33,12 @@ const map = await si2pem.getWmsMap({
 
 ## Reports
 
+Report discovery uses WMS `GetFeatureInfo`, so `bbox` is required in `[west, south, east, north]` order.
+
 ```ts
 const report = await si2pem.getLatestLaboratoryReport({
-  stationIdentity: "PIE9503",
-  bbox: [19.8, 50.0, 20.2, 50.2],
+  stationIdentity: "1862",
+  bbox: [19.003611, 50.225, 19.043611, 50.265],
 });
 
 const antennas = await report?.readAntennas();

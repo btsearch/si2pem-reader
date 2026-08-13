@@ -92,7 +92,7 @@ void test("follows trusted redirects and downloads PDFs", async () => {
 
 function properties(overrides: Record<string, unknown>) {
   return {
-    identity_names: "PIE9503",
+    identity_names: "1862",
     source: "Lab A",
     number: null,
     year: 2023,
@@ -122,9 +122,9 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
   });
 
   const reports = await client.findLaboratoryReports({
-    stationIdentity: "PIE9503",
+    stationIdentity: "1862",
     laboratoryName: "Lab A",
-    bbox: [19.8, 50, 20.2, 50.2],
+    bbox: [19.003611, 50.225, 19.043611, 50.265],
   });
   assert.deepEqual(
     reports.map((report) => report.url),
@@ -136,14 +136,21 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
     publishedAt: "2024-03-05T00:00:00.000Z",
     laboratoryName: "Lab A",
     number: null,
-    identityNames: "PIE9503",
+    identityNames: "1862",
     year: 2024,
   });
-  assert.equal(requestedUrl?.searchParams.get("bbox"), "19.8,50,20.2,50.2,EPSG:4326");
+  assert.equal(requestedUrl?.pathname, "/geoserver/public/wms");
+  assert.equal(requestedUrl?.searchParams.get("REQUEST"), "GetFeatureInfo");
+  assert.equal(requestedUrl?.searchParams.get("LAYERS"), "measures");
+  assert.equal(requestedUrl?.searchParams.get("QUERY_LAYERS"), "measures");
+  assert.equal(requestedUrl?.searchParams.get("BBOX"), "19.003611,50.225,19.043611,50.265");
+  assert.equal(requestedUrl?.searchParams.get("FEATURE_COUNT"), "100");
+  assert.equal(requestedUrl?.searchParams.get("SORTBY"), "year D,date D");
+  assert.equal(requestedUrl?.searchParams.get("CQL_FILTER"), "identity_names='1862' AND url IS NOT NULL AND measure_type='lab'");
   assert.equal(requests, 1);
 });
 
-void test("forwards bbox when finding the latest laboratory report", async () => {
+void test("uses WMS and forwards bbox when finding the latest laboratory report", async () => {
   let requestedUrl: URL | undefined;
   const client = new SI2PEMClient({
     fetch: async (input) => {
@@ -153,16 +160,17 @@ void test("forwards bbox when finding the latest laboratory report", async () =>
   });
 
   const report = await client.getLatestLaboratoryReport({
-    stationIdentity: "PIE9503",
-    bbox: [19.8, 50, 20.2, 50.2],
+    stationIdentity: "1862",
+    bbox: [19.003611, 50.225, 19.043611, 50.265],
   });
   assert.equal(report, null);
-  assert.equal(requestedUrl?.searchParams.get("bbox"), "19.8,50,20.2,50.2,EPSG:4326");
-  assert.equal(requestedUrl?.searchParams.get("count"), "10");
+  assert.equal(requestedUrl?.searchParams.get("REQUEST"), "GetFeatureInfo");
+  assert.equal(requestedUrl?.searchParams.get("BBOX"), "19.003611,50.225,19.043611,50.265");
+  assert.equal(requestedUrl?.searchParams.get("FEATURE_COUNT"), "10");
 });
 
 void test("reads antennas directly from a laboratory report", async () => {
-  const pdf = antennaReportPdf("PIE9503");
+  const pdf = antennaReportPdf("1862");
   let requests = 0;
   const client = new SI2PEMClient({
     fetch: async () => {
@@ -176,7 +184,10 @@ void test("reads antennas directly from a laboratory report", async () => {
     },
   });
 
-  const report = await client.getLatestLaboratoryReport({ stationIdentity: "PIE9503" });
+  const report = await client.getLatestLaboratoryReport({
+    stationIdentity: "1862",
+    bbox: [19.003611, 50.225, 19.043611, 50.265],
+  });
   assert.equal(requests, 1);
   const antennas = await report?.readAntennas();
   assert.equal(requests, 2);
@@ -195,11 +206,14 @@ void test("validates antennas against the requested station identity", async () 
           type: "FeatureCollection",
           features: [{ properties: properties({ url: "/media/report.pdf", date: "05.03.2024" }) }],
         });
-      return new Response(antennaReportPdf("PIE95030"), { headers: { "content-type": "application/pdf" } });
+      return new Response(antennaReportPdf("18620"), { headers: { "content-type": "application/pdf" } });
     },
   });
 
-  const report = await client.getLatestLaboratoryReport({ stationIdentity: "PIE9503" });
+  const report = await client.getLatestLaboratoryReport({
+    stationIdentity: "1862",
+    bbox: [19.003611, 50.225, 19.043611, 50.265],
+  });
   assert.ok(report);
   await assert.rejects(report.readAntennas(), /does not contain the expected station identity/);
 });
