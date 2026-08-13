@@ -1,7 +1,7 @@
-export type SI2PEMFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+import type { SI2PEMAntenna } from "./reports/antennaParser.ts";
 
 export type SI2PEMClientOptions = {
-  fetch?: SI2PEMFetch;
+  fetch?: typeof globalThis.fetch;
   endpoints?: Partial<SI2PEMEndpoints>;
   headers?: HeadersInit;
   timeoutMs?: number;
@@ -57,29 +57,81 @@ export type SI2PEMMeasureProperties = {
   identity_names?: string | null;
   source_for_filter?: string | null;
   e_intensity_max?: number | null;
-  bts_nonexistent?: boolean | null;
+  bts_nonexistent?: string | null;
   is_old?: boolean | null;
   measure_type?: string | null;
 };
 
+export type SI2PEMSelectiveMeasureProperties = {
+  name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  wm_e?: number | null;
+  wm_h?: number | null;
+  below_sensitivity?: boolean | null;
+  date?: string | null;
+  year?: number | null;
+  url?: string | null;
+  laboratory_id?: number | null;
+  source?: string | null;
+  identity_names?: string | null;
+  source_for_filter?: string | null;
+  bts_nonexistent?: string | null;
+  is_old?: boolean | null;
+};
+
+export type SI2PEMMonitoringProperties = {
+  name?: string | null;
+  location?: string | null;
+  city: string;
+  address: string;
+  gauge: string;
+  probe: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  latest_measured_at?: string | null;
+  created_at?: string | null;
+  owner: string;
+  year?: number | null;
+};
+
+export type SI2PEMBroadcastingStationProperties = {
+  name?: string | null;
+  company_name: string;
+  decision_no: string;
+  city: string;
+  street: string;
+  house_no: string;
+};
+
 export type SI2PEMSimpleBaseStationProperties = {
-  identity_name?: string | null;
-  city?: string | null;
+  name?: string | null;
+  identity_name: string;
+  city: string;
   address?: string | null;
   teryt?: number | null;
-  is_calculable?: boolean | null;
-  is_active?: boolean | null;
-  is_included_in_recent_simulation?: boolean | null;
-  operator_name?: string | null;
+  is_calculable: boolean;
+  is_active: boolean;
+  is_included_in_recent_simulation: boolean;
+  operator_name: string;
   is_old?: boolean | null;
-  owner_id?: number | null;
-  is_shared?: boolean | null;
+  owner_id: number;
+  is_shared: boolean;
 };
 
 export type SI2PEMExtendedBaseStationProperties = SI2PEMSimpleBaseStationProperties & {
-  no_permit?: boolean | null;
+  no_permit?: string | null;
   permit?: string | null;
   disabling_date?: string | null;
+};
+
+export type SI2PEMSimulationBaseStationProperties = {
+  is_active: boolean;
+  is_included_in_recent_simulation: boolean;
+  operator_name: string;
+  is_old?: boolean | null;
+  owner_id: number;
+  is_shared: boolean;
 };
 
 export type SI2PEMPlannedMeasureProperties = {
@@ -87,8 +139,8 @@ export type SI2PEMPlannedMeasureProperties = {
   bs_name: string;
   city: string;
   location_in_city: string;
-  date_from: string;
-  date_to: string;
+  date_from?: string | null;
+  date_to?: string | null;
   installation_operator_name: string;
   laboratory_name: string;
   laboratory_pca: string;
@@ -145,11 +197,35 @@ export type SI2PEMPlannedMeasurement = {
   report: string | null;
 };
 
-export type SI2PEMLaboratoryReport = {
+export type SI2PEMLaboratoryReportData = {
   url: string;
   publishedAt: string | null;
   laboratoryName: string | null;
   number: string | null;
   identityNames: string;
   year: number | null;
+};
+
+export type SI2PEMLaboratoryReport = SI2PEMLaboratoryReportData & {
+  readAntennas(): Promise<SI2PEMAntenna[]>;
+};
+
+export type SI2PEMFeaturePropertiesMap = {
+  "public:broadcasting_stations": SI2PEMBroadcastingStationProperties;
+  "public:extend_base_stations": SI2PEMExtendedBaseStationProperties;
+  "public:measures_7": SI2PEMMeasureProperties;
+  "public:measures_7_14": SI2PEMMeasureProperties;
+  "public:measures_14_21": SI2PEMMeasureProperties;
+  "public:measures_21_28": SI2PEMMeasureProperties;
+  "public:measures_28": SI2PEMMeasureProperties;
+  "public:measures_all": SI2PEMMeasureProperties;
+  "public:measures_old": SI2PEMMeasureProperties;
+  "public:monitoring": SI2PEMMonitoringProperties;
+  "public:planned_measures": SI2PEMPlannedMeasureProperties;
+  "public:selective_measures": SI2PEMSelectiveMeasureProperties;
+  "public:selective_measures_old": SI2PEMSelectiveMeasureProperties;
+  "public:sim_active_included_base_stations": SI2PEMSimulationBaseStationProperties;
+  "public:sim_active_not_included_base_stations": SI2PEMSimulationBaseStationProperties;
+  "public:sim_inactive_included_base_stations": SI2PEMSimulationBaseStationProperties;
+  "public:simple_base_stations": SI2PEMSimpleBaseStationProperties;
 };

@@ -1,13 +1,12 @@
 import { SI2PEMError, SI2PEM_ERROR_CODES } from "./errors.ts";
-import type { SI2PEMFetch } from "./types.ts";
 
-export type BoundedHttpOptions = {
-  fetch?: SI2PEMFetch;
+type HttpClientOptions = {
+  fetch?: typeof globalThis.fetch;
   headers?: HeadersInit;
   timeoutMs?: number;
 };
 
-export type BoundedRequestInit = RequestInit & {
+type HttpRequestInit = RequestInit & {
   maxRedirects?: number;
   timeoutMs?: number;
   validateUrl?: (url: URL) => URL;
@@ -29,7 +28,7 @@ function mergeHeaders(defaults: HeadersInit, overrides: HeadersInit | undefined)
   return headers;
 }
 
-async function readBoundedBody(response: Response, maxBytes: number): Promise<Uint8Array> {
+async function readBoundedBodyBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maxBytes)
     throw new SI2PEMError(SI2PEM_ERROR_CODES.responseTooLarge, "SI2PEM response exceeds the configured size limit");
@@ -60,12 +59,12 @@ async function readBoundedBody(response: Response, maxBytes: number): Promise<Ui
   return bytes;
 }
 
-export function createBoundedHttp(options: BoundedHttpOptions = {}) {
+export function createHttpClient(options: HttpClientOptions = {}) {
   const fetchImplementation = options.fetch ?? globalThis.fetch.bind(globalThis);
   const defaultHeaders = options.headers ?? {};
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS;
 
-  async function getBytes(url: string | URL, maxBytes: number, init: BoundedRequestInit = {}): Promise<BinaryResponse> {
+  async function getBytes(url: string | URL, maxBytes: number, init: HttpRequestInit = {}): Promise<BinaryResponse> {
     const { maxRedirects = 5, timeoutMs, validateUrl, ...requestInit } = init;
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort(init.signal?.reason);
@@ -79,7 +78,7 @@ export function createBoundedHttp(options: BoundedHttpOptions = {}) {
       let redirects = 0;
       while (true) {
         // oxlint-disable-next-line no-await-in-loop
-        response = await fetchImplementation(requestUrl, {
+        response = await fetchImplementation(String(requestUrl), {
           ...requestInit,
           headers: mergeHeaders(defaultHeaders, init.headers),
           redirect: validateUrl ? "manual" : requestInit.redirect,
@@ -98,7 +97,7 @@ export function createBoundedHttp(options: BoundedHttpOptions = {}) {
       if (!response.ok)
         throw new SI2PEMError(SI2PEM_ERROR_CODES.httpError, `SI2PEM returned HTTP ${response.status}`, { statusCode: response.status });
       return {
-        bytes: await readBoundedBody(response, maxBytes),
+        bytes: await readBoundedBodyBytes(response, maxBytes),
         contentType: response.headers.get("content-type"),
         url: response.url || String(requestUrl),
       };
@@ -117,12 +116,8 @@ export function createBoundedHttp(options: BoundedHttpOptions = {}) {
     }
   }
 
-  async function getText(url: string | URL, maxBytes: number, init: BoundedRequestInit = {}): Promise<string> {
-    return new TextDecoder().decode((await getBytes(url, maxBytes, init)).bytes);
-  }
-
-  async function getJson<Result>(url: string | URL, maxBytes: number, init: BoundedRequestInit = {}): Promise<Result> {
-    const text = await getText(url, maxBytes, init);
+  async function getJson<Result>(url: string | URL, maxBytes: number, init: HttpRequestInit = {}): Promise<Result> {
+    const text = new TextDecoder().decode((await getBytes(url, maxBytes, init)).bytes);
     try {
       return JSON.parse(text) as Result;
     } catch (error) {
@@ -132,7 +127,5 @@ export function createBoundedHttp(options: BoundedHttpOptions = {}) {
     }
   }
 
-  return { getBytes, getText, getJson };
+  return { getBytes, getJson };
 }
-
-export type BoundedHttp = ReturnType<typeof createBoundedHttp>;

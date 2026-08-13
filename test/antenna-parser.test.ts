@@ -33,18 +33,20 @@ void test("parses the antenna table and flattens bands", () => {
     {
       rowNumber: 1,
       pageNumber: 1,
-      antennaModel: "ABC-100",
-      manufacturer: "Kathrein",
-      heightAglM: 30.5,
-      azimuthDeg: 150,
-      eirpW: 2000,
+      antenna: {
+        model: "ABC-100",
+        manufacturer: "Kathrein",
+        mountedHeight: 30.5,
+        azimuth: 150,
+      },
+      eirp: 2000,
       bands: [
         {
           label: "LTE1800",
           technology: "LTE",
           frequencyMHz: 1800,
-          tiltRangeDeg: { minimumDeg: 0, maximumDeg: 6 },
-          measuredTiltDeg: 4,
+          tiltRange: { minimum: 0, maximum: 6 },
+          measuredTilt: 4,
         },
       ],
     },
@@ -54,5 +56,11 @@ void test("parses the antenna table and flattens bands", () => {
   assert.equal(antennas.length, 1);
   assert.equal(antennas[0]?.bandIndex, 0);
   assert.equal(antennas[0]?.frequencyMHz, 1800);
-  assert.equal(antennas[0]?.antennaModel, "ABC-100");
+  assert.equal(antennas[0]?.antenna.model, "ABC-100");
+  assert.equal(antennas[0]?.antenna.manufacturer, "Kathrein");
+  assert.equal(antennas[0]?.antenna.mountedHeight, 30.5);
+  assert.equal(antennas[0]?.antenna.azimuth, 150);
+  assert.equal(antennas[0]?.eirp, 2000);
+  assert.deepEqual(antennas[0]?.tiltRange, { minimum: 0, maximum: 6 });
+  assert.equal(antennas[0]?.measuredTilt, 4);
 });

@@ -1,5 +1,5 @@
-export { parseAntennaReport, readAntennaReport } from "./readAntennaReport.ts";
-export type { ParseAntennaReportOptions, ReadAntennaReportOptions, SI2PEMAntennaReport } from "./readAntennaReport.ts";
+export { parseAntennaReport } from "./antennaReport.ts";
+export type { ParseAntennaReportOptions, SI2PEMAntennaReport } from "./antennaReport.ts";
 export { extractPdfText, extractPdfTextItems } from "./pdfText.ts";
 export type { ExtractPdfTextOptions, ExtractedPdfTextItem } from "./pdfText.ts";
 export { flattenSI2PEMAntennaRows, parseSI2PEMAntennaRows } from "./antennaParser.ts";

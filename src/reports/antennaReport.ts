@@ -1,22 +1,17 @@
-import type { SI2PEMClient } from "../client.ts";
 import { SI2PEMError, SI2PEM_ERROR_CODES } from "../errors.ts";
-import type { SI2PEMLaboratoryReport } from "../types.ts";
+import type { SI2PEMLaboratoryReportData } from "../types.ts";
 import { containsSI2PEMStationIdentity } from "../url.ts";
 import { type SI2PEMAntenna, type SI2PEMAntennaRow, flattenSI2PEMAntennaRows, parseSI2PEMAntennaRows } from "./antennaParser.ts";
 import { extractPdfTextItems } from "./pdfText.ts";
 
 export type ParseAntennaReportOptions = {
-  report?: SI2PEMLaboratoryReport | null;
-  expectedStationIdentity?: string;
-};
-
-export type ReadAntennaReportOptions = {
+  report?: SI2PEMLaboratoryReportData | null;
   expectedStationIdentity?: string;
 };
 
 export type SI2PEMAntennaReport = {
   url: string | null;
-  report: SI2PEMLaboratoryReport | null;
+  report: SI2PEMLaboratoryReportData | null;
   pdf: Uint8Array;
   rows: SI2PEMAntennaRow[];
   antennas: SI2PEMAntenna[];
@@ -39,18 +34,4 @@ export async function parseAntennaReport(pdf: Uint8Array, options: ParseAntennaR
     rows,
     antennas: flattenSI2PEMAntennaRows(rows),
   };
-}
-
-export async function readAntennaReport(
-  source: Pick<SI2PEMClient, "downloadReport">,
-  report: SI2PEMLaboratoryReport | string,
-  options: ReadAntennaReportOptions = {},
-): Promise<SI2PEMAntennaReport> {
-  const url = typeof report === "string" ? report : report.url;
-  const pdf = await source.downloadReport(url);
-  const parsed = await parseAntennaReport(pdf, {
-    report: typeof report === "string" ? null : report,
-    expectedStationIdentity: options.expectedStationIdentity,
-  });
-  return { ...parsed, url };
 }

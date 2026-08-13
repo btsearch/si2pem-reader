@@ -1,26 +1,28 @@
 import type { ExtractedPdfTextItem } from "./pdfText.ts";
 
 export type SI2PEMTiltRange = {
-  minimumDeg: number;
-  maximumDeg: number;
+  minimum: number;
+  maximum: number;
 };
 
 export type SI2PEMAntennaBand = {
   label: string | null;
   technology: string | null;
   frequencyMHz: number;
-  tiltRangeDeg: SI2PEMTiltRange | null;
-  measuredTiltDeg: number | null;
+  tiltRange: SI2PEMTiltRange | null;
+  measuredTilt: number | null;
 };
 
 export type SI2PEMAntennaRow = {
   rowNumber: number | null;
   pageNumber: number;
-  antennaModel: string | null;
-  manufacturer: string | null;
-  heightAglM: number;
-  azimuthDeg: number | null;
-  eirpW: number | null;
+  antenna: {
+    model: string | null;
+    manufacturer: string | null;
+    mountedHeight: number;
+    azimuth: number | null;
+  };
+  eirp: number | null;
   bands: SI2PEMAntennaBand[];
 };
 
@@ -36,9 +38,9 @@ type Composite = {
   index: number;
   endIndex: number;
   pageNumber: number;
-  heightAglM: number;
-  azimuthDeg: number;
-  eirpW: number;
+  mountedHeight: number;
+  azimuth: number;
+  eirp: number;
   inlineFrequency: Frequency | null;
 };
 
@@ -100,10 +102,10 @@ function parseTiltRange(items: ExtractedPdfTextItem[]): SI2PEMTiltRange | null {
   const joined = items.map((item) => item.text.replace(/\s+/g, "")).join("");
   const match = /^(-?\d{1,2}(?:[.,]\d+)?)-(-?\d{1,2}(?:[.,]\d+)?)$/.exec(joined);
   if (!match) return null;
-  const minimumDeg = boundedNumber(match[1]!, -MAX_TILT_DEG, MAX_TILT_DEG);
-  const maximumDeg = boundedNumber(match[2]!, -MAX_TILT_DEG, MAX_TILT_DEG);
-  if (minimumDeg === null || maximumDeg === null || minimumDeg > maximumDeg) return null;
-  return { minimumDeg, maximumDeg };
+  const minimum = boundedNumber(match[1]!, -MAX_TILT_DEG, MAX_TILT_DEG);
+  const maximum = boundedNumber(match[2]!, -MAX_TILT_DEG, MAX_TILT_DEG);
+  if (minimum === null || maximum === null || minimum > maximum) return null;
+  return { minimum, maximum };
 }
 
 function findCompositeItems(items: ExtractedPdfTextItem[]): Composite[] {
@@ -113,19 +115,19 @@ function findCompositeItems(items: ExtractedPdfTextItem[]): Composite[] {
     const second = items[index + 1]!;
     const third = items[index + 2]!;
     if (!onSameLine(first, second) || !onSameLine(second, third)) continue;
-    const azimuthDeg = boundedNumber(first.text, 0, 360);
-    const heightAglM = boundedNumber(second.text, 0.1, MAX_HEIGHT_M);
-    const eirpW = boundedNumber(third.text, 0.1, 100_000_000, true);
-    if (azimuthDeg === null || heightAglM === null || eirpW === null) continue;
+    const azimuth = boundedNumber(first.text, 0, 360);
+    const mountedHeight = boundedNumber(second.text, 0.1, MAX_HEIGHT_M);
+    const eirp = boundedNumber(third.text, 0.1, 100_000_000, true);
+    if (azimuth === null || mountedHeight === null || eirp === null) continue;
     const fourth = items[index + 3];
     const inlineFrequency = fourth && onSameLine(third, fourth) ? parseFrequency(fourth.text) : null;
     matches.push({
       index,
       endIndex: index + (inlineFrequency ? 4 : 3),
       pageNumber: first.pageNumber,
-      heightAglM,
-      azimuthDeg,
-      eirpW,
+      mountedHeight,
+      azimuth,
+      eirp,
       inlineFrequency,
     });
   }
@@ -145,7 +147,7 @@ function buildRow(rowNumber: number, items: ExtractedPdfTextItem[], composite: C
     const tiltRangeDeg = parseTiltRange(suffix.slice(0, -1));
     const measuredTiltDeg = boundedNumber(suffix.at(-1)!.text, -MAX_TILT_DEG, MAX_TILT_DEG);
     if (tiltRangeDeg === null || measuredTiltDeg === null) return null;
-    bands = [{ ...composite.inlineFrequency, tiltRangeDeg, measuredTiltDeg }];
+    bands = [{ ...composite.inlineFrequency, tiltRange: tiltRangeDeg, measuredTilt: measuredTiltDeg }];
   } else {
     const frequencies: Frequency[] = [];
     for (const item of suffix) {
@@ -159,19 +161,21 @@ function buildRow(rowNumber: number, items: ExtractedPdfTextItem[], composite: C
     if (tiltRanges.some((range) => range === null) || measuredTilts.some((tilt) => tilt === null)) return null;
     bands = frequencies.map((frequency, index) => ({
       ...frequency,
-      tiltRangeDeg: tiltRanges[index]!,
-      measuredTiltDeg: measuredTilts[index]!,
+      tiltRange: tiltRanges[index]!,
+      measuredTilt: measuredTilts[index]!,
     }));
   }
 
   return {
     rowNumber,
     pageNumber: composite.pageNumber,
-    antennaModel: prefix.at(-2) ?? null,
-    manufacturer: prefix.at(-1) ?? null,
-    heightAglM: composite.heightAglM,
-    azimuthDeg: composite.azimuthDeg,
-    eirpW: composite.eirpW,
+    antenna: {
+      model: prefix.at(-2) ?? null,
+      manufacturer: prefix.at(-1) ?? null,
+      mountedHeight: composite.mountedHeight,
+      azimuth: composite.azimuth,
+    },
+    eirp: composite.eirp,
     bands,
   };
 }
@@ -255,18 +259,20 @@ function parseProseRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
     rows.push({
       rowNumber: null,
       pageNumber: pageNumberAt(center),
-      antennaModel: null,
-      manufacturer: null,
-      heightAglM,
-      azimuthDeg: azimuthDeg !== null && azimuthDeg <= 360 ? azimuthDeg : null,
-      eirpW: null,
+      antenna: {
+        model: null,
+        manufacturer: null,
+        mountedHeight: heightAglM,
+        azimuth: azimuthDeg !== null && azimuthDeg <= 360 ? azimuthDeg : null,
+      },
+      eirp: null,
       bands: [
         {
           label: String(frequencyMHz),
           technology: null,
           frequencyMHz,
-          tiltRangeDeg: null,
-          measuredTiltDeg,
+          tiltRange: null,
+          measuredTilt: measuredTiltDeg,
         },
       ],
     });
@@ -286,11 +292,8 @@ export function flattenSI2PEMAntennaRows(rows: SI2PEMAntennaRow[]): SI2PEMAntenn
       ...band,
       rowNumber: row.rowNumber,
       pageNumber: row.pageNumber,
-      antennaModel: row.antennaModel,
-      manufacturer: row.manufacturer,
-      heightAglM: row.heightAglM,
-      azimuthDeg: row.azimuthDeg,
-      eirpW: row.eirpW,
+      antenna: { ...row.antenna },
+      eirp: row.eirp,
       bandIndex,
     })),
   );

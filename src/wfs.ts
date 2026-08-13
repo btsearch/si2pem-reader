@@ -1,5 +1,5 @@
-export type WfsGetFeatureRequest = {
-  typeName: string;
+export type WfsGetFeatureRequest<TypeName extends string = string> = {
+  typeName: TypeName;
   bbox?: [number, number, number, number];
   bboxCrs?: string;
   cqlFilter?: string;
