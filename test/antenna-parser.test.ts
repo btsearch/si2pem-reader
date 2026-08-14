@@ -64,3 +64,67 @@ void test("parses the antenna table and flattens bands", () => {
   assert.deepEqual(antennas[0]?.tiltRange, { minimum: 0, maximum: 6 });
   assert.equal(antennas[0]?.measuredTilt, 4);
 });
+
+void test("parses a multi-band row whose tilt range cell wraps across text items", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 724),
+    item("1", 647),
+    item("50396", 556),
+    item("ATR4518R13", 653),
+    item("Huawei", 641),
+    item("110", 647),
+    item("31,70", 647),
+    item("4998*", 647),
+    item("800", 653),
+    item("2600", 641),
+    item("10,0 -", 660),
+    item("10,0", 647),
+    item("4,0 - 4,0", 635),
+    item("10,0", 653),
+    item("4,0", 641),
+    item("Lp.", 691),
+    item("Azymut", 699),
+    item("H", 699),
+    item("EIRP", 699),
+    item("Pasmo", 699),
+    item("Tilt", 699),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.deepEqual(rows, [
+    {
+      rowNumber: 1,
+      pageNumber: 1,
+      antenna: {
+        model: "ATR4518R13",
+        manufacturer: "Huawei",
+        mountedHeight: 31.7,
+        azimuth: 110,
+      },
+      eirp: 4998,
+      bands: [
+        {
+          label: "800",
+          technology: null,
+          frequencyMHz: 800,
+          tiltRange: { minimum: 10, maximum: 10 },
+          measuredTilt: 10,
+        },
+        {
+          label: "2600",
+          technology: null,
+          frequencyMHz: 2600,
+          tiltRange: { minimum: 4, maximum: 4 },
+          measuredTilt: 4,
+        },
+      ],
+    },
+  ]);
+
+  const antennas = flattenSI2PEMAntennaRows(rows);
+  assert.equal(antennas.length, 2);
+  assert.equal(antennas[0]?.frequencyMHz, 800);
+  assert.deepEqual(antennas[0]?.tiltRange, { minimum: 10, maximum: 10 });
+  assert.equal(antennas[1]?.frequencyMHz, 2600);
+  assert.equal(antennas[1]?.bandIndex, 1);
+});

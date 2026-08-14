@@ -46,6 +46,7 @@ type Composite = {
 
 const SAME_LINE_Y_TOLERANCE = 2;
 const MAX_TILT_DEG = 20;
+const MAX_TILT_RANGE_ITEMS = 3;
 const MAX_HEIGHT_M = 300;
 const MIN_FREQUENCY_MHZ = 30;
 const MAX_FREQUENCY_MHZ = 100_000;
@@ -108,6 +109,25 @@ function parseTiltRange(items: ExtractedPdfTextItem[]): SI2PEMTiltRange | null {
   return { minimum, maximum };
 }
 
+function consumeTiltRanges(items: ExtractedPdfTextItem[], count: number): { ranges: SI2PEMTiltRange[]; rest: ExtractedPdfTextItem[] } | null {
+  const ranges: SI2PEMTiltRange[] = [];
+  let cursor = 0;
+  while (ranges.length < count && cursor < items.length) {
+    let consumed = 0;
+    for (let span = 1; span <= MAX_TILT_RANGE_ITEMS && cursor + span <= items.length; span++) {
+      const range = parseTiltRange(items.slice(cursor, cursor + span));
+      if (range === null) continue;
+      ranges.push(range);
+      consumed = span;
+      break;
+    }
+    if (!consumed) return null;
+    cursor += consumed;
+  }
+  if (ranges.length < count) return null;
+  return { ranges, rest: items.slice(cursor) };
+}
+
 function findCompositeItems(items: ExtractedPdfTextItem[]): Composite[] {
   const matches: Composite[] = [];
   for (let index = 0; index + 2 < items.length; index++) {
@@ -155,13 +175,14 @@ function buildRow(rowNumber: number, items: ExtractedPdfTextItem[], composite: C
       if (frequency === null) break;
       frequencies.push(frequency);
     }
-    if (!frequencies.length || frequencies.length > 20 || suffix.length !== frequencies.length * 3) return null;
-    const tiltRanges = suffix.slice(frequencies.length, frequencies.length * 2).map((item) => parseTiltRange([item]));
-    const measuredTilts = suffix.slice(frequencies.length * 2).map((item) => boundedNumber(item.text, -MAX_TILT_DEG, MAX_TILT_DEG));
-    if (tiltRanges.some((range) => range === null) || measuredTilts.some((tilt) => tilt === null)) return null;
+    if (!frequencies.length || frequencies.length > 20) return null;
+    const consumed = consumeTiltRanges(suffix.slice(frequencies.length), frequencies.length);
+    if (consumed === null || consumed.rest.length !== frequencies.length) return null;
+    const measuredTilts = consumed.rest.map((item) => boundedNumber(item.text, -MAX_TILT_DEG, MAX_TILT_DEG));
+    if (measuredTilts.some((tilt) => tilt === null)) return null;
     bands = frequencies.map((frequency, index) => ({
       ...frequency,
-      tiltRange: tiltRanges[index]!,
+      tiltRange: consumed.ranges[index]!,
       measuredTilt: measuredTilts[index]!,
     }));
   }
