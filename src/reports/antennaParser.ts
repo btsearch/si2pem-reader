@@ -45,6 +45,7 @@ type Composite = {
 };
 
 const SAME_LINE_Y_TOLERANCE = 2;
+const MERGED_CELL_Y_TOLERANCE = 12;
 const MAX_TILT_DEG = 20;
 const MAX_TILT_RANGE_ITEMS = 3;
 const MAX_HEIGHT_M = 300;
@@ -95,8 +96,8 @@ function normalizeLabel(value: string): string {
     .toLowerCase();
 }
 
-function onSameLine(a: ExtractedPdfTextItem, b: ExtractedPdfTextItem): boolean {
-  return a.pageNumber === b.pageNumber && Math.abs(a.y - b.y) <= SAME_LINE_Y_TOLERANCE;
+function onSameLine(a: ExtractedPdfTextItem, b: ExtractedPdfTextItem, tolerance = SAME_LINE_Y_TOLERANCE): boolean {
+  return a.pageNumber === b.pageNumber && Math.abs(a.y - b.y) <= tolerance;
 }
 
 function parseTiltRange(items: ExtractedPdfTextItem[]): SI2PEMTiltRange | null {
@@ -128,22 +129,26 @@ function consumeTiltRanges(items: ExtractedPdfTextItem[], count: number): { rang
   return { ranges, rest: items.slice(cursor) };
 }
 
-function findCompositeItems(items: ExtractedPdfTextItem[]): Composite[] {
+function findCompositeItems(items: ExtractedPdfTextItem[], inheritedHeight: number | null): Composite[] {
+  const width = inheritedHeight === null ? 3 : 2;
   const matches: Composite[] = [];
-  for (let index = 0; index + 2 < items.length; index++) {
+  for (let index = 0; index + width <= items.length; index++) {
     const first = items[index]!;
-    const second = items[index + 1]!;
-    const third = items[index + 2]!;
-    if (!onSameLine(first, second) || !onSameLine(second, third)) continue;
+    const last = items[index + width - 1]!;
+    if (!onSameLine(first, last)) continue;
     const azimuth = boundedNumber(first.text, 0, 360);
-    const mountedHeight = boundedNumber(second.text, 0.1, MAX_HEIGHT_M);
-    const eirp = boundedNumber(third.text, 0.1, 100_000_000, true);
+    const eirp = boundedNumber(last.text, 0.1, 100_000_000, true);
+    let mountedHeight = inheritedHeight;
+    if (mountedHeight === null) {
+      const heightItem = items[index + 1]!;
+      if (onSameLine(first, heightItem, MERGED_CELL_Y_TOLERANCE)) mountedHeight = boundedNumber(heightItem.text, 0.1, MAX_HEIGHT_M);
+    }
     if (azimuth === null || mountedHeight === null || eirp === null) continue;
-    const fourth = items[index + 3];
-    const inlineFrequency = fourth && onSameLine(third, fourth) ? parseFrequency(fourth.text) : null;
+    const next = items[index + width];
+    const inlineFrequency = next && onSameLine(last, next) ? parseFrequency(next.text) : null;
     matches.push({
       index,
-      endIndex: index + (inlineFrequency ? 4 : 3),
+      endIndex: index + width + (inlineFrequency ? 1 : 0),
       pageNumber: first.pageNumber,
       mountedHeight,
       azimuth,
@@ -154,11 +159,17 @@ function findCompositeItems(items: ExtractedPdfTextItem[]): Composite[] {
   return matches;
 }
 
-function buildRow(rowNumber: number, items: ExtractedPdfTextItem[], composite: Composite): SI2PEMAntennaRow | null {
+function buildRow(
+  rowNumber: number,
+  items: ExtractedPdfTextItem[],
+  composite: Composite,
+  previous: SI2PEMAntennaRow | null,
+): SI2PEMAntennaRow | null {
   const prefix = items
     .slice(0, composite.index)
     .map((item) => item.text.trim())
     .filter(Boolean);
+  const inherited = prefix.length === 0 ? previous : null;
   const suffix = items.slice(composite.endIndex);
   let bands: SI2PEMAntennaBand[];
 
@@ -191,8 +202,8 @@ function buildRow(rowNumber: number, items: ExtractedPdfTextItem[], composite: C
     rowNumber,
     pageNumber: composite.pageNumber,
     antenna: {
-      model: prefix.at(-2) ?? null,
-      manufacturer: prefix.at(-1) ?? null,
+      model: prefix.at(-2) ?? inherited?.antenna.model ?? null,
+      manufacturer: prefix.at(-1) ?? inherited?.antenna.manufacturer ?? null,
       mountedHeight: composite.mountedHeight,
       azimuth: composite.azimuth,
     },
@@ -201,11 +212,15 @@ function buildRow(rowNumber: number, items: ExtractedPdfTextItem[], composite: C
   };
 }
 
-function parseTableRow(rowNumber: number, items: ExtractedPdfTextItem[]): SI2PEMAntennaRow | null {
-  const rows = findCompositeItems(items)
-    .map((composite) => buildRow(rowNumber, items, composite))
-    .filter((row) => row !== null);
+function parseTableRow(rowNumber: number, items: ExtractedPdfTextItem[], previous: SI2PEMAntennaRow | null): SI2PEMAntennaRow | null {
+  let composites = findCompositeItems(items, null);
+  if (!composites.length && previous) composites = findCompositeItems(items, previous.antenna.mountedHeight);
+  const rows = composites.map((composite) => buildRow(rowNumber, items, composite, previous)).filter((row) => row !== null);
   return rows.length === 1 ? rows[0]! : null;
+}
+
+function isRowNumber(text: string, value: number): boolean {
+  return new RegExp(`^${value}[a-z]?$`, "i").test(text.trim());
 }
 
 function parseTableRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
@@ -223,15 +238,13 @@ function parseTableRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
   let rowStart = markerIndex + 1;
   let expectedRowNumber = 1;
   while (rowStart < headerIndex) {
-    const currentRowIndex = items.findIndex(
-      (item, index) => index >= rowStart && index < headerIndex && item.text.trim() === String(expectedRowNumber),
-    );
+    const currentRowIndex = items.findIndex((item, index) => index >= rowStart && index < headerIndex && isRowNumber(item.text, expectedRowNumber));
     if (currentRowIndex < 0) return [];
     const nextRowIndex = items.findIndex(
-      (item, index) => index > currentRowIndex && index < headerIndex && item.text.trim() === String(expectedRowNumber + 1),
+      (item, index) => index > currentRowIndex && index < headerIndex && isRowNumber(item.text, expectedRowNumber + 1),
     );
     const rowEnd = nextRowIndex < 0 ? headerIndex : nextRowIndex;
-    const row = parseTableRow(expectedRowNumber, items.slice(currentRowIndex + 1, rowEnd));
+    const row = parseTableRow(expectedRowNumber, items.slice(currentRowIndex + 1, rowEnd), rows.at(-1) ?? null);
     if (!row) return [];
     rows.push(row);
     if (nextRowIndex < 0) break;
