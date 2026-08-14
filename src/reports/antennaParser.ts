@@ -9,6 +9,7 @@ export type SI2PEMAntennaBand = {
   label: string | null;
   technology: string | null;
   frequencyMHz: number;
+  eirp: number | null;
   tiltRange: SI2PEMTiltRange | null;
   measuredTilt: number | null;
 };
@@ -40,7 +41,7 @@ type Composite = {
   pageNumber: number;
   mountedHeight: number;
   azimuth: number;
-  eirp: number;
+  eirp: number | null;
   inlineFrequency: Frequency | null;
 };
 
@@ -48,7 +49,9 @@ const SAME_LINE_Y_TOLERANCE = 2;
 const MERGED_CELL_Y_TOLERANCE = 12;
 const MAX_TILT_DEG = 20;
 const MAX_TILT_RANGE_ITEMS = 3;
+const MAX_BANDS = 20;
 const MAX_HEIGHT_M = 300;
+const MAX_EIRP_W = 100_000_000;
 const MIN_FREQUENCY_MHZ = 30;
 const MAX_FREQUENCY_MHZ = 100_000;
 
@@ -129,23 +132,27 @@ function consumeTiltRanges(items: ExtractedPdfTextItem[], count: number): { rang
   return { ranges, rest: items.slice(cursor) };
 }
 
-function findCompositeItems(items: ExtractedPdfTextItem[], inheritedHeight: number | null): Composite[] {
-  const width = inheritedHeight === null ? 3 : 2;
+function findCompositeItems(items: ExtractedPdfTextItem[], inheritedHeight: number | null, deferredEirp = false): Composite[] {
+  const hasHeightCell = inheritedHeight === null;
+  const hasEirpCell = !deferredEirp;
+  const width = 1 + (hasHeightCell ? 1 : 0) + (hasEirpCell ? 1 : 0);
   const matches: Composite[] = [];
   for (let index = 0; index + width <= items.length; index++) {
     const first = items[index]!;
     const last = items[index + width - 1]!;
     if (!onSameLine(first, last)) continue;
     const azimuth = boundedNumber(first.text, 0, 360);
-    const eirp = boundedNumber(last.text, 0.1, 100_000_000, true);
+    if (azimuth === null) continue;
+    const eirp = hasEirpCell ? boundedNumber(last.text, 0.1, MAX_EIRP_W, true) : null;
+    if (hasEirpCell && eirp === null) continue;
     let mountedHeight = inheritedHeight;
-    if (mountedHeight === null) {
+    if (hasHeightCell) {
       const heightItem = items[index + 1]!;
-      if (onSameLine(first, heightItem, MERGED_CELL_Y_TOLERANCE)) mountedHeight = boundedNumber(heightItem.text, 0.1, MAX_HEIGHT_M);
+      mountedHeight = onSameLine(first, heightItem, MERGED_CELL_Y_TOLERANCE) ? boundedNumber(heightItem.text, 0.1, MAX_HEIGHT_M) : null;
     }
-    if (azimuth === null || mountedHeight === null || eirp === null) continue;
+    if (mountedHeight === null) continue;
     const next = items[index + width];
-    const inlineFrequency = next && onSameLine(last, next) ? parseFrequency(next.text) : null;
+    const inlineFrequency = hasEirpCell && next && onSameLine(last, next) ? parseFrequency(next.text) : null;
     matches.push({
       index,
       endIndex: index + width + (inlineFrequency ? 1 : 0),
@@ -157,6 +164,49 @@ function findCompositeItems(items: ExtractedPdfTextItem[], inheritedHeight: numb
     });
   }
   return matches;
+}
+
+function parseFrequencies(items: ExtractedPdfTextItem[]): Frequency[] {
+  const frequencies: Frequency[] = [];
+  for (const item of items) {
+    const frequency = parseFrequency(item.text);
+    if (frequency === null) break;
+    frequencies.push(frequency);
+  }
+  return frequencies;
+}
+
+function buildBands(frequencies: Frequency[], eirps: (number | null)[], items: ExtractedPdfTextItem[]): SI2PEMAntennaBand[] | null {
+  const consumed = consumeTiltRanges(items, frequencies.length);
+  if (consumed === null || consumed.rest.length !== frequencies.length) return null;
+  const measuredTilts = consumed.rest.map((item) => boundedNumber(item.text, -MAX_TILT_DEG, MAX_TILT_DEG));
+  if (measuredTilts.some((tilt) => tilt === null)) return null;
+  return frequencies.map((frequency, index) => ({
+    ...frequency,
+    eirp: eirps[index] ?? null,
+    tiltRange: consumed.ranges[index]!,
+    measuredTilt: measuredTilts[index]!,
+  }));
+}
+
+function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { eirp: number | null; bands: SI2PEMAntennaBand[] } | null {
+  const eirps: number[] = [];
+  for (const item of suffix) {
+    const eirp = boundedNumber(item.text, 0.1, MAX_EIRP_W, true);
+    if (eirp === null) break;
+    eirps.push(eirp);
+  }
+  const candidates: SI2PEMAntennaBand[][] = [];
+  for (let count = 1; count <= Math.min(eirps.length, MAX_BANDS) && count * 2 <= suffix.length; count++) {
+    const frequencies = parseFrequencies(suffix.slice(count, count * 2));
+    if (frequencies.length !== count) continue;
+    const bands = buildBands(frequencies, eirps.slice(0, count), suffix.slice(count * 2));
+    if (bands !== null) candidates.push(bands);
+  }
+  if (candidates.length !== 1) return null;
+  const bands = candidates[0]!;
+  const uniformEirp = new Set(bands.map((band) => band.eirp)).size === 1;
+  return { eirp: uniformEirp ? bands[0]!.eirp : null, bands };
 }
 
 function buildRow(
@@ -172,30 +222,26 @@ function buildRow(
   const inherited = prefix.length === 0 ? previous : null;
   const suffix = items.slice(composite.endIndex);
   let bands: SI2PEMAntennaBand[];
+  let eirp = composite.eirp;
 
-  if (composite.inlineFrequency) {
+  if (composite.eirp === null) {
+    const perBand = parsePerBandEirpBands(suffix);
+    if (perBand === null) return null;
+    eirp = perBand.eirp;
+    bands = perBand.bands;
+  } else if (composite.inlineFrequency) {
     if (suffix.length < 2 || suffix.length > 3) return null;
     const tiltRangeDeg = parseTiltRange(suffix.slice(0, -1));
     const measuredTiltDeg = boundedNumber(suffix.at(-1)!.text, -MAX_TILT_DEG, MAX_TILT_DEG);
     if (tiltRangeDeg === null || measuredTiltDeg === null) return null;
-    bands = [{ ...composite.inlineFrequency, tiltRange: tiltRangeDeg, measuredTilt: measuredTiltDeg }];
+    bands = [{ ...composite.inlineFrequency, eirp: composite.eirp, tiltRange: tiltRangeDeg, measuredTilt: measuredTiltDeg }];
   } else {
-    const frequencies: Frequency[] = [];
-    for (const item of suffix) {
-      const frequency = parseFrequency(item.text);
-      if (frequency === null) break;
-      frequencies.push(frequency);
-    }
-    if (!frequencies.length || frequencies.length > 20) return null;
-    const consumed = consumeTiltRanges(suffix.slice(frequencies.length), frequencies.length);
-    if (consumed === null || consumed.rest.length !== frequencies.length) return null;
-    const measuredTilts = consumed.rest.map((item) => boundedNumber(item.text, -MAX_TILT_DEG, MAX_TILT_DEG));
-    if (measuredTilts.some((tilt) => tilt === null)) return null;
-    bands = frequencies.map((frequency, index) => ({
-      ...frequency,
-      tiltRange: consumed.ranges[index]!,
-      measuredTilt: measuredTilts[index]!,
-    }));
+    const frequencies = parseFrequencies(suffix);
+    if (!frequencies.length || frequencies.length > MAX_BANDS) return null;
+    const bandEirps = frequencies.length === 1 ? [composite.eirp] : frequencies.map(() => null);
+    const built = buildBands(frequencies, bandEirps, suffix.slice(frequencies.length));
+    if (built === null) return null;
+    bands = built;
   }
 
   return {
@@ -207,16 +253,23 @@ function buildRow(
       mountedHeight: composite.mountedHeight,
       azimuth: composite.azimuth,
     },
-    eirp: composite.eirp,
+    eirp,
     bands,
   };
 }
 
 function parseTableRow(rowNumber: number, items: ExtractedPdfTextItem[], previous: SI2PEMAntennaRow | null): SI2PEMAntennaRow | null {
-  let composites = findCompositeItems(items, null);
-  if (!composites.length && previous) composites = findCompositeItems(items, previous.antenna.mountedHeight);
-  const rows = composites.map((composite) => buildRow(rowNumber, items, composite, previous)).filter((row) => row !== null);
-  return rows.length === 1 ? rows[0]! : null;
+  const stages = [
+    findCompositeItems(items, null),
+    findCompositeItems(items, null, true),
+    previous ? findCompositeItems(items, previous.antenna.mountedHeight) : [],
+  ];
+  for (const composites of stages) {
+    const rows = composites.map((composite) => buildRow(rowNumber, items, composite, previous)).filter((row) => row !== null);
+    if (rows.length === 1) return rows[0]!;
+    if (rows.length > 1) return null;
+  }
+  return null;
 }
 
 function isRowNumber(text: string, value: number): boolean {
@@ -305,6 +358,7 @@ function parseProseRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
           label: String(frequencyMHz),
           technology: null,
           frequencyMHz,
+          eirp: null,
           tiltRange: null,
           measuredTilt: measuredTiltDeg,
         },
@@ -327,7 +381,7 @@ export function flattenSI2PEMAntennaRows(rows: SI2PEMAntennaRow[]): SI2PEMAntenn
       rowNumber: row.rowNumber,
       pageNumber: row.pageNumber,
       antenna: { ...row.antenna },
-      eirp: row.eirp,
+      eirp: band.eirp ?? row.eirp,
       bandIndex,
     })),
   );

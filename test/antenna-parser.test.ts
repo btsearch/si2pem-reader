@@ -45,6 +45,7 @@ void test("parses the antenna table and flattens bands", () => {
           label: "LTE1800",
           technology: "LTE",
           frequencyMHz: 1800,
+          eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
           measuredTilt: 4,
         },
@@ -106,6 +107,7 @@ void test("parses a multi-band row whose tilt range cell wraps across text items
           label: "LTE1800",
           technology: "LTE",
           frequencyMHz: 1800,
+          eirp: null,
           tiltRange: { minimum: 0, maximum: 6 },
           measuredTilt: 4,
         },
@@ -113,6 +115,7 @@ void test("parses a multi-band row whose tilt range cell wraps across text items
           label: "GSM900",
           technology: "GSM",
           frequencyMHz: 900,
+          eirp: null,
           tiltRange: { minimum: 0, maximum: 8 },
           measuredTilt: 5,
         },
@@ -171,6 +174,7 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
           label: "LTE1800",
           technology: "LTE",
           frequencyMHz: 1800,
+          eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
           measuredTilt: 4,
         },
@@ -191,10 +195,74 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
           label: "LTE1800",
           technology: "LTE",
           frequencyMHz: 1800,
+          eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
           measuredTilt: 4,
         },
       ],
     },
   ]);
+});
+
+void test("parses a multi-band row with per-band EIRP cells", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 120),
+    item("1", 110),
+    item("ABC-100", 100),
+    item("Kathrein", 100),
+    item("150", 90),
+    item("30,5", 90),
+    item("2000", 96),
+    item("3000", 84),
+    item("LTE1800", 96),
+    item("GSM900", 84),
+    item("0-6", 96),
+    item("0-8", 84),
+    item("4", 96),
+    item("5", 84),
+    item("Lp.", 60),
+    item("Azymut", 60),
+    item("H", 60),
+    item("EIRP", 60),
+    item("Pasmo", 60),
+    item("Tilt", 60),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.deepEqual(rows, [
+    {
+      rowNumber: 1,
+      pageNumber: 1,
+      antenna: {
+        model: "ABC-100",
+        manufacturer: "Kathrein",
+        mountedHeight: 30.5,
+        azimuth: 150,
+      },
+      eirp: null,
+      bands: [
+        {
+          label: "LTE1800",
+          technology: "LTE",
+          frequencyMHz: 1800,
+          eirp: 2000,
+          tiltRange: { minimum: 0, maximum: 6 },
+          measuredTilt: 4,
+        },
+        {
+          label: "GSM900",
+          technology: "GSM",
+          frequencyMHz: 900,
+          eirp: 3000,
+          tiltRange: { minimum: 0, maximum: 8 },
+          measuredTilt: 5,
+        },
+      ],
+    },
+  ]);
+
+  const antennas = flattenSI2PEMAntennaRows(rows);
+  assert.equal(antennas.length, 2);
+  assert.equal(antennas[0]?.eirp, 2000);
+  assert.equal(antennas[1]?.eirp, 3000);
 });
