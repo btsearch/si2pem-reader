@@ -139,18 +139,20 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
     identityNames: "1862",
     year: 2024,
   });
-  assert.equal(requestedUrl?.pathname, "/geoserver/public/wms");
-  assert.equal(requestedUrl?.searchParams.get("REQUEST"), "GetFeatureInfo");
-  assert.equal(requestedUrl?.searchParams.get("LAYERS"), "measures");
-  assert.equal(requestedUrl?.searchParams.get("QUERY_LAYERS"), "measures");
-  assert.equal(requestedUrl?.searchParams.get("BBOX"), "19.003611,50.225,19.043611,50.265");
-  assert.equal(requestedUrl?.searchParams.get("FEATURE_COUNT"), "100");
-  assert.equal(requestedUrl?.searchParams.get("SORTBY"), "year D,date D");
-  assert.equal(requestedUrl?.searchParams.get("CQL_FILTER"), "identity_names='1862' AND url IS NOT NULL AND measure_type='lab'");
+  assert.equal(requestedUrl?.pathname, "/geoserver/public/wfs");
+  assert.equal(requestedUrl?.searchParams.get("request"), "GetFeature");
+  assert.equal(requestedUrl?.searchParams.get("typeNames"), "public:measures_all");
+  assert.equal(requestedUrl?.searchParams.get("bbox"), null);
+  assert.equal(requestedUrl?.searchParams.get("count"), "100");
+  assert.equal(requestedUrl?.searchParams.get("sortBy"), "year D,date D");
+  assert.equal(
+    requestedUrl?.searchParams.get("CQL_FILTER"),
+    "identity_names='1862' AND url IS NOT NULL AND measure_type='lab' AND BBOX(geom, 19.003611, 50.225, 19.043611, 50.265, 'EPSG:4326')",
+  );
   assert.equal(requests, 1);
 });
 
-void test("uses WMS and forwards bbox when finding the latest laboratory report", async () => {
+void test("uses WFS and forwards bbox when finding the latest laboratory report", async () => {
   let requestedUrl: URL | undefined;
   const client = new SI2PEMClient({
     fetch: async (input) => {
@@ -164,9 +166,9 @@ void test("uses WMS and forwards bbox when finding the latest laboratory report"
     bbox: [19.003611, 50.225, 19.043611, 50.265],
   });
   assert.equal(report, null);
-  assert.equal(requestedUrl?.searchParams.get("REQUEST"), "GetFeatureInfo");
-  assert.equal(requestedUrl?.searchParams.get("BBOX"), "19.003611,50.225,19.043611,50.265");
-  assert.equal(requestedUrl?.searchParams.get("FEATURE_COUNT"), "10");
+  assert.equal(requestedUrl?.searchParams.get("request"), "GetFeature");
+  assert.ok(requestedUrl?.searchParams.get("CQL_FILTER")?.includes("BBOX(geom, 19.003611, 50.225, 19.043611, 50.265, 'EPSG:4326')"));
+  assert.equal(requestedUrl?.searchParams.get("count"), "10");
 });
 
 void test("reads antennas directly from a laboratory report", async () => {
