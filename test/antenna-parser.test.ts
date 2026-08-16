@@ -204,6 +204,65 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
   ]);
 });
 
+void test("parses tilt ranges with bounds above 20 degrees", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 120),
+    item("1", 110),
+    item("ASI4518R39v07", 100),
+    item("Huawei", 100),
+    item("160", 90),
+    item("26,80", 90),
+    item("29635*", 90),
+    item("800", 80),
+    item("900", 78),
+    item("-8,0 -", 76),
+    item("22,0", 74),
+    item("-8,0 -", 72),
+    item("22,0", 70),
+    item("7,0", 68),
+    item("7,0", 66),
+    item("Lp.", 60),
+    item("Azymut", 60),
+    item("H", 60),
+    item("EIRP", 60),
+    item("Pasmo", 60),
+    item("Tilt", 60),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.deepEqual(rows, [
+    {
+      rowNumber: 1,
+      pageNumber: 1,
+      antenna: {
+        model: "ASI4518R39v07",
+        manufacturer: "Huawei",
+        mountedHeight: 26.8,
+        azimuth: 160,
+      },
+      eirp: 29635,
+      bands: [
+        {
+          label: "800",
+          technology: null,
+          frequencyMHz: 800,
+          eirp: null,
+          tiltRange: { minimum: -8, maximum: 22 },
+          measuredTilt: 7,
+        },
+        {
+          label: "900",
+          technology: null,
+          frequencyMHz: 900,
+          eirp: null,
+          tiltRange: { minimum: -8, maximum: 22 },
+          measuredTilt: 7,
+        },
+      ],
+    },
+  ]);
+});
+
 void test("parses a multi-band row with per-band EIRP cells", () => {
   const items = [
     item("Tabela 1: Opis anten badanych stacji bazowych", 120),

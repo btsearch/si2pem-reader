@@ -47,7 +47,7 @@ type Composite = {
 
 const SAME_LINE_Y_TOLERANCE = 2;
 const MERGED_CELL_Y_TOLERANCE = 12;
-const MAX_TILT_DEG = 20;
+const MAX_TILT_DEG = 30;
 const MAX_TILT_RANGE_ITEMS = 3;
 const MAX_BANDS = 20;
 const MAX_HEIGHT_M = 300;

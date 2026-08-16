@@ -1,6 +1,6 @@
 {
   "name": "si2pem-reader",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "Reader for SI2PEM WFS, WMS, public REST data, and laboratory PDF reports",
   "keywords": [
     "antenna",
