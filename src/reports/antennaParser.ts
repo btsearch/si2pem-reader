@@ -46,7 +46,7 @@ type Composite = {
 };
 
 const SAME_LINE_Y_TOLERANCE = 2;
-const MERGED_CELL_Y_TOLERANCE = 12;
+const MERGED_CELL_Y_TOLERANCE = 16;
 const MAX_TILT_DEG = 30;
 const MAX_TILT_RANGE_ITEMS = 3;
 const MAX_BANDS = 20;
@@ -140,7 +140,7 @@ function findCompositeItems(items: ExtractedPdfTextItem[], inheritedHeight: numb
   for (let index = 0; index + width <= items.length; index++) {
     const first = items[index]!;
     const last = items[index + width - 1]!;
-    if (!onSameLine(first, last)) continue;
+    if (!onSameLine(first, last, hasEirpCell ? SAME_LINE_Y_TOLERANCE : MERGED_CELL_Y_TOLERANCE)) continue;
     const azimuth = boundedNumber(first.text, 0, 360);
     if (azimuth === null) continue;
     const eirp = hasEirpCell ? boundedNumber(last.text, 0.1, MAX_EIRP_W, true) : null;
@@ -263,6 +263,7 @@ function parseTableRow(rowNumber: number, items: ExtractedPdfTextItem[], previou
     findCompositeItems(items, null),
     findCompositeItems(items, null, true),
     previous ? findCompositeItems(items, previous.antenna.mountedHeight) : [],
+    previous ? findCompositeItems(items, previous.antenna.mountedHeight, true) : [],
   ];
   for (const composites of stages) {
     const rows = composites.map((composite) => buildRow(rowNumber, items, composite, previous)).filter((row) => row !== null);

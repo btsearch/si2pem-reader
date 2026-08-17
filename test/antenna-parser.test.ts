@@ -8,6 +8,17 @@ function item(text: string, y: number): ExtractedPdfTextItem {
   return { text, pageNumber: 1, x: 0, y, width: 10 };
 }
 
+function band(frequencyMHz: number, eirp: number) {
+  return {
+    label: String(frequencyMHz),
+    technology: null,
+    frequencyMHz,
+    eirp,
+    tiltRange: { minimum: 2, maximum: 12 },
+    measuredTilt: 7,
+  };
+}
+
 void test("parses the antenna table and flattens bands", () => {
   const items = [
     item("Tabela 1: Opis anten badanych stacji bazowych", 120),
@@ -259,6 +270,69 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
           measuredTilt: 7,
         },
       ],
+    },
+  ]);
+});
+
+void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 200),
+    item("1b", 110),
+    item("AMB4520R9V06", 108),
+    item("Huawei", 100),
+    item("255", 110),
+    item("58,00", 95.5),
+    item("3701", 116),
+    item("4602", 104),
+    item("1800", 116),
+    item("2600", 104),
+    item("2,0 - 12,0", 116),
+    item("2,0 - 12,0", 104),
+    item("7,0", 116),
+    item("7,0", 104),
+    item("2b", 81),
+    item("315", 81),
+    item("3701", 87),
+    item("4602", 75),
+    item("1800", 87),
+    item("2600", 75),
+    item("2,0 - 12,0", 87),
+    item("2,0 - 12,0", 75),
+    item("7,0", 87),
+    item("7,0", 75),
+    item("Lp.", 60),
+    item("Azymut", 60),
+    item("H", 60),
+    item("EIRP", 60),
+    item("Pasmo", 60),
+    item("Tilt", 60),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.deepEqual(rows, [
+    {
+      rowNumber: 1,
+      pageNumber: 1,
+      antenna: {
+        model: "AMB4520R9V06",
+        manufacturer: "Huawei",
+        mountedHeight: 58,
+        azimuth: 255,
+      },
+      eirp: null,
+      bands: [band(1800, 3701), band(2600, 4602)],
+    },
+    {
+      rowNumber: 2,
+      pageNumber: 1,
+      antenna: {
+        model: "AMB4520R9V06",
+        manufacturer: "Huawei",
+        mountedHeight: 58,
+        azimuth: 315,
+      },
+      eirp: null,
+      bands: [band(1800, 3701), band(2600, 4602)],
     },
   ]);
 });
