@@ -52,7 +52,7 @@ const MAX_TILT_RANGE_ITEMS = 3;
 const MAX_BANDS = 20;
 const MAX_HEIGHT_M = 300;
 const MAX_EIRP_W = 100_000_000;
-const MIN_FREQUENCY_MHZ = 30;
+const MIN_FREQUENCY_MHZ = 10;
 const MAX_FREQUENCY_MHZ = 100_000;
 
 function numberValue(value: string): number {

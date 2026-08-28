@@ -274,6 +274,54 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
   ]);
 });
 
+void test("parses per-band EIRP rows whose band column repeats a low azimuth value", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 200),
+    item("1", 110),
+    item("BT21216", 90),
+    item("RRV4-65B-R6H4VB-V2", 112),
+    item("Andrew", 108),
+    item("10", 110),
+    item("41,40", 110),
+    item("6673", 118),
+    item("5709", 114),
+    item("6344", 110),
+    item("10", 118),
+    item("10", 114),
+    item("10", 110),
+    item("2,0 - 12,0", 118),
+    item("2,0 - 12,0", 114),
+    item("2,0 - 12,0", 110),
+    item("7,0", 118),
+    item("7,0", 114),
+    item("7,0", 110),
+    item("Lp.", 60),
+    item("Azymut", 60),
+    item("H", 60),
+    item("EIRP", 60),
+    item("Pasmo", 60),
+    item("Tilt", 60),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0]?.antenna, {
+    model: "RRV4-65B-R6H4VB-V2",
+    manufacturer: "Andrew",
+    mountedHeight: 41.4,
+    azimuth: 10,
+  });
+  assert.equal(rows[0]?.eirp, null);
+  assert.deepEqual(
+    rows[0]?.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
+    [
+      [10, 6673],
+      [10, 5709],
+      [10, 6344],
+    ],
+  );
+});
+
 void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
   const items = [
     item("Tabela 1: Opis anten badanych stacji bazowych", 200),
