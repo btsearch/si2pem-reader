@@ -113,7 +113,7 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
         features: [
           { properties: properties({ url: "/media/old.pdf", date: "01.02.2023" }) },
           { properties: properties({ url: "/media/new.pdf", date: "05.03.2024", year: 2024 }) },
-          { properties: properties({ url: "/media/old.pdf", date: "01.02.2023" }) },
+          { properties: properties({ url: "/media/old.pdf", date: "10.02.2023" }) },
           { properties: properties({ url: null, date: "10.05.2023" }) },
           { properties: properties({ url: "/media/other.pdf", date: "10.05.2023", source: "Lab B" }) },
         ],
@@ -131,6 +131,7 @@ void test("deduplicates, sorts, and filters laboratory reports", async () => {
     ["/media/new.pdf", "/media/old.pdf"],
   );
   assert.equal(typeof reports[0]?.readAntennas, "function");
+  assert.equal(reports[1]?.publishedAt, "2023-02-10T00:00:00.000Z");
   assert.deepEqual(JSON.parse(JSON.stringify(reports[0])), {
     url: "/media/new.pdf",
     publishedAt: "2024-03-05T00:00:00.000Z",

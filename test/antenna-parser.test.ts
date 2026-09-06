@@ -4,8 +4,12 @@ import test from "node:test";
 import { flattenSI2PEMAntennaRows, parseSI2PEMAntennaRows } from "../src/reports/antennaParser.ts";
 import type { ExtractedPdfTextItem } from "../src/reports/pdfText.ts";
 
-function item(text: string, y: number): ExtractedPdfTextItem {
-  return { text, pageNumber: 1, x: 0, y, width: 10 };
+function item(text: string, y: number, x = 0): ExtractedPdfTextItem {
+  return { text, pageNumber: 1, x, y, width: 10 };
+}
+
+function proseItem(text: string, pageNumber: number): ExtractedPdfTextItem {
+  return { text, pageNumber, x: 0, y: 0, width: 10 };
 }
 
 function band(frequencyMHz: number, eirp: number) {
@@ -446,4 +450,71 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
   assert.equal(antennas.length, 2);
   assert.equal(antennas[0]?.eirp, 2000);
   assert.equal(antennas[1]?.eirp, 3000);
+});
+
+void test("parses rows whose azimuth matches the next row number", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 220),
+    item("1", 210),
+    item("AMB4520R9", 200, 160),
+    item("Huawei", 200, 175),
+    item("2", 190, 260),
+    item("36,70", 190, 300),
+    item("22665*", 190, 346),
+    item("1800", 180, 411),
+    item("0-6", 178, 460),
+    item("4", 176, 528),
+    item("2", 110),
+    item("AMB4520R9", 100, 160),
+    item("Huawei", 100, 175),
+    item("2", 90, 260),
+    item("36,70", 90, 300),
+    item("22665*", 90, 346),
+    item("1800", 80, 411),
+    item("0-6", 78, 460),
+    item("4", 76, 528),
+    item("Lp.", 60),
+    item("Azymut", 60),
+    item("H", 60),
+    item("EIRP", 60),
+    item("Pasmo", 60),
+    item("Tilt", 60),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows.length, 2);
+  for (const row of rows) {
+    assert.deepEqual(row.antenna, {
+      model: "AMB4520R9",
+      manufacturer: "Huawei",
+      mountedHeight: 36.7,
+      azimuth: 2,
+    });
+    assert.equal(row.eirp, 22665);
+    assert.deepEqual(
+      row.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
+      [[1800, 22665]],
+    );
+  }
+});
+
+void test("maps prose rows to their source pages after skipped duplicates", () => {
+  const first = "Azymut 120. Częstotliwość 1800 MHz. Tilt 4. Wysokość zawieszenia anteny 30 m";
+  const second = "Azymut 240. Częstotliwość 3500 MHz. Tilt 6. Wysokość zawieszenia anteny 45 m";
+  const gap = "x".repeat(501);
+  const rows = parseSI2PEMAntennaRows([proseItem(first, 1), proseItem(gap, 1), proseItem(first, 2), proseItem(gap, 2), proseItem(second, 3)]);
+
+  assert.deepEqual(
+    rows.map((row) => ({
+      pageNumber: row.pageNumber,
+      mountedHeight: row.antenna.mountedHeight,
+      azimuth: row.antenna.azimuth,
+      frequencyMHz: row.bands[0]?.frequencyMHz,
+      measuredTilt: row.bands[0]?.measuredTilt,
+    })),
+    [
+      { pageNumber: 1, mountedHeight: 30, azimuth: 120, frequencyMHz: 1800, measuredTilt: 4 },
+      { pageNumber: 3, mountedHeight: 45, azimuth: 240, frequencyMHz: 3500, measuredTilt: 6 },
+    ],
+  );
 });

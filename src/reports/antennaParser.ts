@@ -27,7 +27,7 @@ export type SI2PEMAntennaRow = {
   bands: SI2PEMAntennaBand[];
 };
 
-export type SI2PEMAntenna = SI2PEMAntennaBand & Omit<SI2PEMAntennaRow, "bands"> & { bandIndex: number };
+export type SI2PEMAntenna = SI2PEMAntennaBand & Omit<SI2PEMAntennaRow, "bands" | "eirp"> & { bandIndex: number };
 
 type Frequency = {
   label: string;
@@ -47,6 +47,7 @@ type Composite = {
 
 const SAME_LINE_Y_TOLERANCE = 2;
 const MERGED_CELL_Y_TOLERANCE = 16;
+const ROW_NUMBER_X_TOLERANCE = 12;
 const MAX_TILT_DEG = 30;
 const MAX_TILT_RANGE_ITEMS = 3;
 const MAX_BANDS = 20;
@@ -196,17 +197,18 @@ function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { eirp: number |
     if (eirp === null) break;
     eirps.push(eirp);
   }
-  const candidates: SI2PEMAntennaBand[][] = [];
+  let candidate: SI2PEMAntennaBand[] | null = null;
   for (let count = 1; count <= Math.min(eirps.length, MAX_BANDS) && count * 2 <= suffix.length; count++) {
     const frequencies = parseFrequencies(suffix.slice(count, count * 2));
     if (frequencies.length !== count) continue;
     const bands = buildBands(frequencies, eirps.slice(0, count), suffix.slice(count * 2));
-    if (bands !== null) candidates.push(bands);
+    if (bands === null) continue;
+    if (candidate !== null) return null;
+    candidate = bands;
   }
-  if (candidates.length !== 1) return null;
-  const bands = candidates[0]!;
-  const uniformEirp = new Set(bands.map((band) => band.eirp)).size === 1;
-  return { eirp: uniformEirp ? bands[0]!.eirp : null, bands };
+  if (candidate === null) return null;
+  const uniformEirp = new Set(candidate.map((band) => band.eirp)).size === 1;
+  return { eirp: uniformEirp ? candidate[0]!.eirp : null, bands: candidate };
 }
 
 function buildRow(
@@ -259,22 +261,36 @@ function buildRow(
 }
 
 function parseTableRow(rowNumber: number, items: ExtractedPdfTextItem[], previous: SI2PEMAntennaRow | null): SI2PEMAntennaRow | null {
-  const stages = [
-    findCompositeItems(items, null),
-    findCompositeItems(items, null, true),
-    previous ? findCompositeItems(items, previous.antenna.mountedHeight) : [],
-    previous ? findCompositeItems(items, previous.antenna.mountedHeight, true) : [],
+  const stages: { inheritedHeight: number | null; deferredEirp: boolean }[] = [
+    { inheritedHeight: null, deferredEirp: false },
+    { inheritedHeight: null, deferredEirp: true },
   ];
-  for (const composites of stages) {
-    const rows = composites.map((composite) => buildRow(rowNumber, items, composite, previous)).filter((row) => row !== null);
-    if (rows.length === 1) return rows[0]!;
-    if (rows.length > 1) return null;
+  if (previous !== null) {
+    const inheritedHeight = previous.antenna.mountedHeight;
+    stages.push({ inheritedHeight, deferredEirp: false }, { inheritedHeight, deferredEirp: true });
+  }
+
+  for (const { inheritedHeight, deferredEirp } of stages) {
+    let candidate: SI2PEMAntennaRow | null = null;
+    for (const composite of findCompositeItems(items, inheritedHeight, deferredEirp)) {
+      const row = buildRow(rowNumber, items, composite, previous);
+      if (row === null) continue;
+      if (candidate !== null) return null;
+      candidate = row;
+    }
+    if (candidate !== null) return candidate;
   }
   return null;
 }
 
-function isRowNumber(text: string, value: number): boolean {
-  return new RegExp(`^${value}[a-z]?$`, "i").test(text.trim());
+function findRowNumberIndex(items: ExtractedPdfTextItem[], value: number, startIndex: number, endIndex: number, expectedX?: number): number {
+  const pattern = new RegExp(`^${value}[a-z]?$`, "i");
+  for (let index = startIndex; index < endIndex; index++) {
+    const item = items[index]!;
+    if (!pattern.test(item.text.trim())) continue;
+    if (expectedX === undefined || Math.abs(item.x - expectedX) <= ROW_NUMBER_X_TOLERANCE) return index;
+  }
+  return -1;
 }
 
 function parseTableRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
@@ -289,20 +305,18 @@ function parseTableRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
   if (headerIndex < 0) return [];
 
   const rows: SI2PEMAntennaRow[] = [];
-  let rowStart = markerIndex + 1;
   let expectedRowNumber = 1;
-  while (rowStart < headerIndex) {
-    const currentRowIndex = items.findIndex((item, index) => index >= rowStart && index < headerIndex && isRowNumber(item.text, expectedRowNumber));
-    if (currentRowIndex < 0) return [];
-    const nextRowIndex = items.findIndex(
-      (item, index) => index > currentRowIndex && index < headerIndex && isRowNumber(item.text, expectedRowNumber + 1),
-    );
+  let currentRowIndex = findRowNumberIndex(items, expectedRowNumber, markerIndex + 1, headerIndex);
+  if (currentRowIndex < 0) return [];
+  const rowNumberX = items[currentRowIndex]!.x;
+  while (currentRowIndex < headerIndex) {
+    const nextRowIndex = findRowNumberIndex(items, expectedRowNumber + 1, currentRowIndex + 1, headerIndex, rowNumberX);
     const rowEnd = nextRowIndex < 0 ? headerIndex : nextRowIndex;
     const row = parseTableRow(expectedRowNumber, items.slice(currentRowIndex + 1, rowEnd), rows.at(-1) ?? null);
     if (!row) return [];
     rows.push(row);
     if (nextRowIndex < 0) break;
-    rowStart = nextRowIndex;
+    currentRowIndex = nextRowIndex;
     expectedRowNumber++;
   }
 
@@ -318,17 +332,13 @@ function parseProseRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
     joinedLength += value.length + 1;
   }
   const text = normalized.join("\n");
-  const pageNumberAt = (offset: number): number => {
-    let index = 0;
-    while (index + 1 < itemStarts.length && itemStarts[index + 1]! <= offset) index++;
-    return items[index]?.pageNumber ?? 0;
-  };
   const heightPattern = /wysoko(?:ść|sc)(?:\s+zawieszenia)?\s+anten(?:y|na)[^\d]{0,100}(\d{1,3}(?:[.,]\d+)?)\s*m/giu;
   const azimuthPattern = /azymut[^\d]{0,80}(\d{1,3}(?:[.,]\d+)?)/giu;
   const frequencyPattern = /(?:częstotliwo(?:ść|sc)|pasmo|frequency)[^\d]{0,100}(\d{2,5}(?:[.,]\d+)?)\s*(?:MHz)?/giu;
   const tiltPattern = /(?:pochylenie|tilt)[^\d-]{0,60}(-?\d{1,2}(?:[.,]\d+)?)/giu;
   const rows: SI2PEMAntennaRow[] = [];
   const seen = new Set<string>();
+  let pageItemIndex = 0;
 
   for (const heightMatch of text.matchAll(heightPattern)) {
     const heightAglM = numberValue(heightMatch[1]!);
@@ -344,9 +354,10 @@ function parseProseRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
     const fingerprint = [heightAglM, azimuthDeg, measuredTiltDeg, frequencyMHz].join(":");
     if (seen.has(fingerprint)) continue;
     seen.add(fingerprint);
+    while (pageItemIndex + 1 < itemStarts.length && itemStarts[pageItemIndex + 1]! <= center) pageItemIndex++;
     rows.push({
       rowNumber: null,
-      pageNumber: pageNumberAt(center),
+      pageNumber: items[pageItemIndex]?.pageNumber ?? 0,
       antenna: {
         model: null,
         manufacturer: null,

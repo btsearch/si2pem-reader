@@ -184,12 +184,13 @@ export class SI2PEMClient {
       sortBy: "year D,date D",
       cqlFilter: `identity_names='${stationIdentity}' AND url IS NOT NULL AND measure_type='lab' AND BBOX(geom, ${minLng}, ${minLat}, ${maxLng}, ${maxLat}, 'EPSG:4326')`,
     });
-    const reports = features.features.flatMap((feature) => {
+    const reports: SI2PEMLaboratoryReport[] = [];
+    for (const feature of features.features) {
       const properties = feature.properties;
       const url = properties.url ?? null;
       const identityNames = properties.identity_names ?? "";
-      if (!url) return [];
-      if (request.laboratoryName && properties.source !== request.laboratoryName) return [];
+      if (!url) continue;
+      if (request.laboratoryName && properties.source !== request.laboratoryName) continue;
       const report: SI2PEMLaboratoryReportData = {
         url,
         publishedAt: si2pemDateToISO(properties.date),
@@ -198,12 +199,17 @@ export class SI2PEMClient {
         identityNames,
         year: properties.year ?? null,
       };
-      return [new LaboratoryReport(report, request.stationIdentity, this)];
-    });
+      reports.push(new LaboratoryReport(report, request.stationIdentity, this));
+    }
+
     const seen = new Set<string>();
-    return reports
-      .toSorted((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
-      .filter((report) => !seen.has(report.url) && Boolean(seen.add(report.url)));
+    const uniqueReports: SI2PEMLaboratoryReport[] = [];
+    for (const report of reports.toSorted((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))) {
+      if (seen.has(report.url)) continue;
+      seen.add(report.url);
+      uniqueReports.push(report);
+    }
+    return uniqueReports;
   }
 
   async getLatestLaboratoryReport(request: FindLaboratoryReportsRequest): Promise<SI2PEMLaboratoryReport | null> {
