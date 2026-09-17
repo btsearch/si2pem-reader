@@ -207,8 +207,8 @@ function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { eirp: number |
     candidate = bands;
   }
   if (candidate === null) return null;
-  const uniformEirp = new Set(candidate.map((band) => band.eirp)).size === 1;
-  return { eirp: uniformEirp ? candidate[0]!.eirp : null, bands: candidate };
+  const total = eirps.slice(0, candidate.length).reduce((sum, value) => sum + value, 0);
+  return { eirp: Math.round(total * 1e6) / 1e6, bands: candidate };
 }
 
 function buildRow(

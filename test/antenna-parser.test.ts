@@ -315,7 +315,7 @@ void test("parses per-band EIRP rows whose band column repeats a low azimuth val
     mountedHeight: 41.4,
     azimuth: 10,
   });
-  assert.equal(rows[0]?.eirp, null);
+  assert.equal(rows[0]?.eirp, 18726);
   assert.deepEqual(
     rows[0]?.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
     [
@@ -371,7 +371,7 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
         mountedHeight: 58,
         azimuth: 255,
       },
-      eirp: null,
+      eirp: 8303,
       bands: [band(1800, 3701), band(2600, 4602)],
     },
     {
@@ -383,7 +383,7 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
         mountedHeight: 58,
         azimuth: 315,
       },
-      eirp: null,
+      eirp: 8303,
       bands: [band(1800, 3701), band(2600, 4602)],
     },
   ]);
@@ -424,7 +424,7 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
         mountedHeight: 30.5,
         azimuth: 150,
       },
-      eirp: null,
+      eirp: 5000,
       bands: [
         {
           label: "LTE1800",
@@ -450,6 +450,61 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
   assert.equal(antennas.length, 2);
   assert.equal(antennas[0]?.eirp, 2000);
   assert.equal(antennas[1]?.eirp, 3000);
+});
+
+void test("sums per-band EIRP cells into the row EIRP", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 200),
+    item("1", 110),
+    item("KRE2014022-21", 112),
+    item("Ericsson", 108),
+    item("0", 110),
+    item("47,10", 110),
+    item("9982", 126),
+    item("5845", 118),
+    item("6834", 110),
+    item("2846", 102),
+    item("7076", 94),
+    item("1800", 126),
+    item("2100", 118),
+    item("2600", 110),
+    item("700", 102),
+    item("900", 94),
+    item("2,0 - 12,0", 126),
+    item("2,0 - 12,0", 118),
+    item("2,0 - 12,0", 110),
+    item("2,0 - 12,0", 102),
+    item("2,0 - 12,0", 94),
+    item("7,0", 126),
+    item("7,0", 118),
+    item("7,0", 110),
+    item("7,0", 102),
+    item("7,0", 94),
+    item("Lp.", 60),
+    item("Azymut", 60),
+    item("H", 60),
+    item("EIRP", 60),
+    item("Pasmo", 60),
+    item("Tilt", 60),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.eirp, 32583);
+  assert.deepEqual(
+    rows[0]?.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
+    [
+      [1800, 9982],
+      [2100, 5845],
+      [2600, 6834],
+      [700, 2846],
+      [900, 7076],
+    ],
+  );
+  assert.deepEqual(
+    flattenSI2PEMAntennaRows(rows).map((entry) => entry.eirp),
+    [9982, 5845, 6834, 2846, 7076],
+  );
 });
 
 void test("parses rows whose azimuth matches the next row number", () => {
