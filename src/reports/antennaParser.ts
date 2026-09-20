@@ -11,7 +11,7 @@ export type SI2PEMAntennaBand = {
   value: number;
   eirp: number | null;
   tiltRange: SI2PEMTiltRange | null;
-  measured: number | null;
+  measuredTilt: number | null;
 };
 
 export type SI2PEMAntennaRow = {
@@ -186,7 +186,7 @@ function buildBands(frequencies: Frequency[], eirps: (number | null)[], items: E
     ...frequency,
     eirp: eirps[index] ?? null,
     tiltRange: consumed.ranges[index]!,
-    measured: measuredTilts[index]!,
+    measuredTilt: measuredTilts[index]!,
   }));
 }
 
@@ -236,7 +236,7 @@ function buildRow(
     const tiltRangeDeg = parseTiltRange(suffix.slice(0, -1));
     const measuredTiltDeg = boundedNumber(suffix.at(-1)!.text, -MAX_TILT_DEG, MAX_TILT_DEG);
     if (tiltRangeDeg === null || measuredTiltDeg === null) return null;
-    bands = [{ ...composite.inlineFrequency, eirp: composite.eirp, tiltRange: tiltRangeDeg, measured: measuredTiltDeg }];
+    bands = [{ ...composite.inlineFrequency, eirp: composite.eirp, tiltRange: tiltRangeDeg, measuredTilt: measuredTiltDeg }];
   } else {
     const frequencies = parseFrequencies(suffix);
     if (!frequencies.length || frequencies.length > MAX_BANDS) return null;
@@ -372,7 +372,7 @@ function parseProseRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
           value: frequencyMHz,
           eirp: null,
           tiltRange: null,
-          measured: measuredTiltDeg,
+          measuredTilt: measuredTiltDeg,
         },
       ],
     });

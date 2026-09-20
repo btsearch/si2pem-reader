@@ -19,7 +19,7 @@ function band(value: number, eirp: number) {
     value,
     eirp,
     tiltRange: { minimum: 2, maximum: 12 },
-    measured: 7,
+    measuredTilt: 7,
   };
 }
 
@@ -62,7 +62,7 @@ void test("parses the antenna table and flattens bands", () => {
           value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measured: 4,
+          measuredTilt: 4,
         },
       ],
     },
@@ -79,7 +79,7 @@ void test("parses the antenna table and flattens bands", () => {
   assert.equal(antennas[0]?.eirp, 2000);
   assert.equal(antennas[0]?.totalEirp, 2000);
   assert.deepEqual(antennas[0]?.tiltRange, { minimum: 0, maximum: 6 });
-  assert.equal(antennas[0]?.measured, 4);
+  assert.equal(antennas[0]?.measuredTilt, 4);
 });
 
 void test("parses a multi-band row whose tilt range cell wraps across text items", () => {
@@ -125,7 +125,7 @@ void test("parses a multi-band row whose tilt range cell wraps across text items
           value: 1800,
           eirp: null,
           tiltRange: { minimum: 0, maximum: 6 },
-          measured: 4,
+          measuredTilt: 4,
         },
         {
           label: "GSM900",
@@ -133,7 +133,7 @@ void test("parses a multi-band row whose tilt range cell wraps across text items
           value: 900,
           eirp: null,
           tiltRange: { minimum: 0, maximum: 8 },
-          measured: 5,
+          measuredTilt: 5,
         },
       ],
     },
@@ -199,7 +199,7 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
           value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measured: 4,
+          measuredTilt: 4,
         },
       ],
     },
@@ -220,7 +220,7 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
           value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measured: 4,
+          measuredTilt: 4,
         },
       ],
     },
@@ -271,7 +271,7 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
           value: 800,
           eirp: null,
           tiltRange: { minimum: -8, maximum: 22 },
-          measured: 7,
+          measuredTilt: 7,
         },
         {
           label: "900",
@@ -279,7 +279,7 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
           value: 900,
           eirp: null,
           tiltRange: { minimum: -8, maximum: 22 },
-          measured: 7,
+          measuredTilt: 7,
         },
       ],
     },
@@ -440,7 +440,7 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
           value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measured: 4,
+          measuredTilt: 4,
         },
         {
           label: "GSM900",
@@ -448,7 +448,7 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
           value: 900,
           eirp: 3000,
           tiltRange: { minimum: 0, maximum: 8 },
-          measured: 5,
+          measuredTilt: 5,
         },
       ],
     },
@@ -576,11 +576,11 @@ void test("maps prose rows to their source pages after skipped duplicates", () =
       mountedHeight: row.antenna.mountedHeight,
       azimuth: row.antenna.azimuth,
       value: row.bands[0]?.value,
-      measured: row.bands[0]?.measured,
+      measuredTilt: row.bands[0]?.measuredTilt,
     })),
     [
-      { pageNumber: 1, mountedHeight: 30, azimuth: 120, value: 1800, measured: 4 },
-      { pageNumber: 3, mountedHeight: 45, azimuth: 240, value: 3500, measured: 6 },
+      { pageNumber: 1, mountedHeight: 30, azimuth: 120, value: 1800, measuredTilt: 4 },
+      { pageNumber: 3, mountedHeight: 45, azimuth: 240, value: 3500, measuredTilt: 6 },
     ],
   );
 });
