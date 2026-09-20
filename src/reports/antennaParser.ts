@@ -7,11 +7,11 @@ export type SI2PEMTiltRange = {
 
 export type SI2PEMAntennaBand = {
   label: string | null;
-  technology: string | null;
-  frequencyMHz: number;
+  rat: string | null;
+  value: number;
   eirp: number | null;
   tiltRange: SI2PEMTiltRange | null;
-  measuredTilt: number | null;
+  measured: number | null;
 };
 
 export type SI2PEMAntennaRow = {
@@ -23,16 +23,16 @@ export type SI2PEMAntennaRow = {
     mountedHeight: number;
     azimuth: number | null;
   };
-  eirp: number | null;
+  totalEirp: number | null;
   bands: SI2PEMAntennaBand[];
 };
 
-export type SI2PEMAntenna = SI2PEMAntennaBand & Omit<SI2PEMAntennaRow, "bands" | "eirp"> & { bandIndex: number };
+export type SI2PEMAntenna = SI2PEMAntennaBand & Omit<SI2PEMAntennaRow, "bands"> & { bandIndex: number };
 
 type Frequency = {
   label: string;
-  technology: string | null;
-  frequencyMHz: number;
+  rat: string | null;
+  value: number;
 };
 
 type Composite = {
@@ -76,8 +76,8 @@ function parseFrequency(value: string): Frequency | null {
   if (frequencyMHz === null) return null;
   return {
     label,
-    technology: match[1] === "5GNR" ? "NR" : (match[1] ?? null),
-    frequencyMHz,
+    rat: match[1] === "5GNR" ? "NR" : (match[1] ?? null),
+    value: frequencyMHz,
   };
 }
 
@@ -186,11 +186,11 @@ function buildBands(frequencies: Frequency[], eirps: (number | null)[], items: E
     ...frequency,
     eirp: eirps[index] ?? null,
     tiltRange: consumed.ranges[index]!,
-    measuredTilt: measuredTilts[index]!,
+    measured: measuredTilts[index]!,
   }));
 }
 
-function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { eirp: number | null; bands: SI2PEMAntennaBand[] } | null {
+function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { totalEirp: number; bands: SI2PEMAntennaBand[] } | null {
   const eirps: number[] = [];
   for (const item of suffix) {
     const eirp = boundedNumber(item.text, 0.1, MAX_EIRP_W, true);
@@ -208,7 +208,7 @@ function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { eirp: number |
   }
   if (candidate === null) return null;
   const total = eirps.slice(0, candidate.length).reduce((sum, value) => sum + value, 0);
-  return { eirp: Math.round(total * 1e6) / 1e6, bands: candidate };
+  return { totalEirp: Math.round(total * 1e6) / 1e6, bands: candidate };
 }
 
 function buildRow(
@@ -224,19 +224,19 @@ function buildRow(
   const inherited = prefix.length === 0 ? previous : null;
   const suffix = items.slice(composite.endIndex);
   let bands: SI2PEMAntennaBand[];
-  let eirp = composite.eirp;
+  let totalEirp = composite.eirp;
 
   if (composite.eirp === null) {
     const perBand = parsePerBandEirpBands(suffix);
     if (perBand === null) return null;
-    eirp = perBand.eirp;
+    totalEirp = perBand.totalEirp;
     bands = perBand.bands;
   } else if (composite.inlineFrequency) {
     if (suffix.length < 2 || suffix.length > 3) return null;
     const tiltRangeDeg = parseTiltRange(suffix.slice(0, -1));
     const measuredTiltDeg = boundedNumber(suffix.at(-1)!.text, -MAX_TILT_DEG, MAX_TILT_DEG);
     if (tiltRangeDeg === null || measuredTiltDeg === null) return null;
-    bands = [{ ...composite.inlineFrequency, eirp: composite.eirp, tiltRange: tiltRangeDeg, measuredTilt: measuredTiltDeg }];
+    bands = [{ ...composite.inlineFrequency, eirp: composite.eirp, tiltRange: tiltRangeDeg, measured: measuredTiltDeg }];
   } else {
     const frequencies = parseFrequencies(suffix);
     if (!frequencies.length || frequencies.length > MAX_BANDS) return null;
@@ -255,7 +255,7 @@ function buildRow(
       mountedHeight: composite.mountedHeight,
       azimuth: composite.azimuth,
     },
-    eirp,
+    totalEirp,
     bands,
   };
 }
@@ -364,15 +364,15 @@ function parseProseRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
         mountedHeight: heightAglM,
         azimuth: azimuthDeg !== null && azimuthDeg <= 360 ? azimuthDeg : null,
       },
-      eirp: null,
+      totalEirp: null,
       bands: [
         {
           label: String(frequencyMHz),
-          technology: null,
-          frequencyMHz,
+          rat: null,
+          value: frequencyMHz,
           eirp: null,
           tiltRange: null,
-          measuredTilt: measuredTiltDeg,
+          measured: measuredTiltDeg,
         },
       ],
     });
@@ -393,7 +393,7 @@ export function flattenSI2PEMAntennaRows(rows: SI2PEMAntennaRow[]): SI2PEMAntenn
       rowNumber: row.rowNumber,
       pageNumber: row.pageNumber,
       antenna: { ...row.antenna },
-      eirp: band.eirp ?? row.eirp,
+      totalEirp: row.totalEirp,
       bandIndex,
     })),
   );

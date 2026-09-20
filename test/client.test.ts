@@ -195,7 +195,7 @@ void test("reads antennas directly from a laboratory report", async () => {
   const antennas = await report?.readAntennas();
   assert.equal(requests, 2);
   assert.equal(antennas?.length, 1);
-  assert.equal(antennas?.[0]?.frequencyMHz, 1800);
+  assert.equal(antennas?.[0]?.value, 1800);
   assert.equal(antennas?.[0]?.antenna.mountedHeight, 30.5);
 });
 

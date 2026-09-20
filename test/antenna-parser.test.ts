@@ -12,14 +12,14 @@ function proseItem(text: string, pageNumber: number): ExtractedPdfTextItem {
   return { text, pageNumber, x: 0, y: 0, width: 10 };
 }
 
-function band(frequencyMHz: number, eirp: number) {
+function band(value: number, eirp: number) {
   return {
-    label: String(frequencyMHz),
-    technology: null,
-    frequencyMHz,
+    label: String(value),
+    rat: null,
+    value,
     eirp,
     tiltRange: { minimum: 2, maximum: 12 },
-    measuredTilt: 7,
+    measured: 7,
   };
 }
 
@@ -54,15 +54,15 @@ void test("parses the antenna table and flattens bands", () => {
         mountedHeight: 30.5,
         azimuth: 150,
       },
-      eirp: 2000,
+      totalEirp: 2000,
       bands: [
         {
           label: "LTE1800",
-          technology: "LTE",
-          frequencyMHz: 1800,
+          rat: "LTE",
+          value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measuredTilt: 4,
+          measured: 4,
         },
       ],
     },
@@ -71,14 +71,15 @@ void test("parses the antenna table and flattens bands", () => {
   const antennas = flattenSI2PEMAntennaRows(rows);
   assert.equal(antennas.length, 1);
   assert.equal(antennas[0]?.bandIndex, 0);
-  assert.equal(antennas[0]?.frequencyMHz, 1800);
+  assert.equal(antennas[0]?.value, 1800);
   assert.equal(antennas[0]?.antenna.model, "ABC-100");
   assert.equal(antennas[0]?.antenna.manufacturer, "Kathrein");
   assert.equal(antennas[0]?.antenna.mountedHeight, 30.5);
   assert.equal(antennas[0]?.antenna.azimuth, 150);
   assert.equal(antennas[0]?.eirp, 2000);
+  assert.equal(antennas[0]?.totalEirp, 2000);
   assert.deepEqual(antennas[0]?.tiltRange, { minimum: 0, maximum: 6 });
-  assert.equal(antennas[0]?.measuredTilt, 4);
+  assert.equal(antennas[0]?.measured, 4);
 });
 
 void test("parses a multi-band row whose tilt range cell wraps across text items", () => {
@@ -116,23 +117,23 @@ void test("parses a multi-band row whose tilt range cell wraps across text items
         mountedHeight: 30.5,
         azimuth: 150,
       },
-      eirp: 2000,
+      totalEirp: 2000,
       bands: [
         {
           label: "LTE1800",
-          technology: "LTE",
-          frequencyMHz: 1800,
+          rat: "LTE",
+          value: 1800,
           eirp: null,
           tiltRange: { minimum: 0, maximum: 6 },
-          measuredTilt: 4,
+          measured: 4,
         },
         {
           label: "GSM900",
-          technology: "GSM",
-          frequencyMHz: 900,
+          rat: "GSM",
+          value: 900,
           eirp: null,
           tiltRange: { minimum: 0, maximum: 8 },
-          measuredTilt: 5,
+          measured: 5,
         },
       ],
     },
@@ -140,10 +141,17 @@ void test("parses a multi-band row whose tilt range cell wraps across text items
 
   const antennas = flattenSI2PEMAntennaRows(rows);
   assert.equal(antennas.length, 2);
-  assert.equal(antennas[0]?.frequencyMHz, 1800);
+  assert.equal(antennas[0]?.value, 1800);
   assert.deepEqual(antennas[0]?.tiltRange, { minimum: 0, maximum: 6 });
-  assert.equal(antennas[1]?.frequencyMHz, 900);
+  assert.equal(antennas[1]?.value, 900);
   assert.equal(antennas[1]?.bandIndex, 1);
+  assert.deepEqual(
+    antennas.map((entry) => [entry.eirp, entry.totalEirp]),
+    [
+      [null, 2000],
+      [null, 2000],
+    ],
+  );
 });
 
 void test("parses letter-suffixed row pairs sharing merged antenna cells", () => {
@@ -183,15 +191,15 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
         mountedHeight: 30.5,
         azimuth: 150,
       },
-      eirp: 2000,
+      totalEirp: 2000,
       bands: [
         {
           label: "LTE1800",
-          technology: "LTE",
-          frequencyMHz: 1800,
+          rat: "LTE",
+          value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measuredTilt: 4,
+          measured: 4,
         },
       ],
     },
@@ -204,15 +212,15 @@ void test("parses letter-suffixed row pairs sharing merged antenna cells", () =>
         mountedHeight: 30.5,
         azimuth: 250,
       },
-      eirp: 2000,
+      totalEirp: 2000,
       bands: [
         {
           label: "LTE1800",
-          technology: "LTE",
-          frequencyMHz: 1800,
+          rat: "LTE",
+          value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measuredTilt: 4,
+          measured: 4,
         },
       ],
     },
@@ -255,23 +263,23 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
         mountedHeight: 26.8,
         azimuth: 160,
       },
-      eirp: 29635,
+      totalEirp: 29635,
       bands: [
         {
           label: "800",
-          technology: null,
-          frequencyMHz: 800,
+          rat: null,
+          value: 800,
           eirp: null,
           tiltRange: { minimum: -8, maximum: 22 },
-          measuredTilt: 7,
+          measured: 7,
         },
         {
           label: "900",
-          technology: null,
-          frequencyMHz: 900,
+          rat: null,
+          value: 900,
           eirp: null,
           tiltRange: { minimum: -8, maximum: 22 },
-          measuredTilt: 7,
+          measured: 7,
         },
       ],
     },
@@ -315,9 +323,9 @@ void test("parses per-band EIRP rows whose band column repeats a low azimuth val
     mountedHeight: 41.4,
     azimuth: 10,
   });
-  assert.equal(rows[0]?.eirp, 18726);
+  assert.equal(rows[0]?.totalEirp, 18726);
   assert.deepEqual(
-    rows[0]?.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
+    rows[0]?.bands.map((entry) => [entry.value, entry.eirp]),
     [
       [10, 6673],
       [10, 5709],
@@ -371,7 +379,7 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
         mountedHeight: 58,
         azimuth: 255,
       },
-      eirp: 8303,
+      totalEirp: 8303,
       bands: [band(1800, 3701), band(2600, 4602)],
     },
     {
@@ -383,7 +391,7 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
         mountedHeight: 58,
         azimuth: 315,
       },
-      eirp: 8303,
+      totalEirp: 8303,
       bands: [band(1800, 3701), band(2600, 4602)],
     },
   ]);
@@ -424,23 +432,23 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
         mountedHeight: 30.5,
         azimuth: 150,
       },
-      eirp: 5000,
+      totalEirp: 5000,
       bands: [
         {
           label: "LTE1800",
-          technology: "LTE",
-          frequencyMHz: 1800,
+          rat: "LTE",
+          value: 1800,
           eirp: 2000,
           tiltRange: { minimum: 0, maximum: 6 },
-          measuredTilt: 4,
+          measured: 4,
         },
         {
           label: "GSM900",
-          technology: "GSM",
-          frequencyMHz: 900,
+          rat: "GSM",
+          value: 900,
           eirp: 3000,
           tiltRange: { minimum: 0, maximum: 8 },
-          measuredTilt: 5,
+          measured: 5,
         },
       ],
     },
@@ -450,6 +458,8 @@ void test("parses a multi-band row with per-band EIRP cells", () => {
   assert.equal(antennas.length, 2);
   assert.equal(antennas[0]?.eirp, 2000);
   assert.equal(antennas[1]?.eirp, 3000);
+  assert.equal(antennas[0]?.totalEirp, 5000);
+  assert.equal(antennas[1]?.totalEirp, 5000);
 });
 
 void test("sums per-band EIRP cells into the row EIRP", () => {
@@ -490,9 +500,9 @@ void test("sums per-band EIRP cells into the row EIRP", () => {
 
   const rows = parseSI2PEMAntennaRows(items);
   assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.eirp, 32583);
+  assert.equal(rows[0]?.totalEirp, 32583);
   assert.deepEqual(
-    rows[0]?.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
+    rows[0]?.bands.map((entry) => [entry.value, entry.eirp]),
     [
       [1800, 9982],
       [2100, 5845],
@@ -505,6 +515,7 @@ void test("sums per-band EIRP cells into the row EIRP", () => {
     flattenSI2PEMAntennaRows(rows).map((entry) => entry.eirp),
     [9982, 5845, 6834, 2846, 7076],
   );
+  assert.ok(flattenSI2PEMAntennaRows(rows).every((entry) => entry.totalEirp === 32583));
 });
 
 void test("parses rows whose azimuth matches the next row number", () => {
@@ -545,9 +556,9 @@ void test("parses rows whose azimuth matches the next row number", () => {
       mountedHeight: 36.7,
       azimuth: 2,
     });
-    assert.equal(row.eirp, 22665);
+    assert.equal(row.totalEirp, 22665);
     assert.deepEqual(
-      row.bands.map((entry) => [entry.frequencyMHz, entry.eirp]),
+      row.bands.map((entry) => [entry.value, entry.eirp]),
       [[1800, 22665]],
     );
   }
@@ -564,12 +575,12 @@ void test("maps prose rows to their source pages after skipped duplicates", () =
       pageNumber: row.pageNumber,
       mountedHeight: row.antenna.mountedHeight,
       azimuth: row.antenna.azimuth,
-      frequencyMHz: row.bands[0]?.frequencyMHz,
-      measuredTilt: row.bands[0]?.measuredTilt,
+      value: row.bands[0]?.value,
+      measured: row.bands[0]?.measured,
     })),
     [
-      { pageNumber: 1, mountedHeight: 30, azimuth: 120, frequencyMHz: 1800, measuredTilt: 4 },
-      { pageNumber: 3, mountedHeight: 45, azimuth: 240, frequencyMHz: 3500, measuredTilt: 6 },
+      { pageNumber: 1, mountedHeight: 30, azimuth: 120, value: 1800, measured: 4 },
+      { pageNumber: 3, mountedHeight: 45, azimuth: 240, value: 3500, measured: 6 },
     ],
   );
 });
