@@ -50,7 +50,7 @@ const MERGED_CELL_Y_TOLERANCE = 16;
 const ROW_NUMBER_X_TOLERANCE = 12;
 const MAX_TILT_DEG = 30;
 const MAX_TILT_RANGE_ITEMS = 3;
-const MAX_BANDS = 20;
+const MAX_BANDS = 64;
 const MAX_HEIGHT_M = 300;
 const MAX_EIRP_W = 100_000_000;
 const MIN_FREQUENCY_MHZ = 10;
@@ -190,6 +190,31 @@ function buildBands(frequencies: Frequency[], eirps: (number | null)[], items: E
   }));
 }
 
+function roundEirp(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
+function isSameBand(a: SI2PEMAntennaBand, b: SI2PEMAntennaBand): boolean {
+  return (
+    a.rat === b.rat &&
+    a.value === b.value &&
+    a.measuredTilt === b.measuredTilt &&
+    a.tiltRange?.minimum === b.tiltRange?.minimum &&
+    a.tiltRange?.maximum === b.tiltRange?.maximum
+  );
+}
+
+function mergeDuplicateBands(bands: SI2PEMAntennaBand[], totalEirp: number | null): SI2PEMAntennaBand[] {
+  const merged: SI2PEMAntennaBand[] = [];
+  for (const band of bands) {
+    const duplicate = merged.find((entry) => isSameBand(entry, band));
+    if (duplicate === undefined) merged.push({ ...band });
+    else duplicate.eirp = duplicate.eirp !== null && band.eirp !== null ? roundEirp(duplicate.eirp + band.eirp) : null;
+  }
+  if (merged.length === 1 && merged[0]!.eirp === null) merged[0]!.eirp = totalEirp;
+  return merged;
+}
+
 function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { totalEirp: number; bands: SI2PEMAntennaBand[] } | null {
   const eirps: number[] = [];
   for (const item of suffix) {
@@ -208,7 +233,7 @@ function parsePerBandEirpBands(suffix: ExtractedPdfTextItem[]): { totalEirp: num
   }
   if (candidate === null) return null;
   const total = eirps.slice(0, candidate.length).reduce((sum, value) => sum + value, 0);
-  return { totalEirp: Math.round(total * 1e6) / 1e6, bands: candidate };
+  return { totalEirp: roundEirp(total), bands: candidate };
 }
 
 function buildRow(
@@ -240,8 +265,7 @@ function buildRow(
   } else {
     const frequencies = parseFrequencies(suffix);
     if (!frequencies.length || frequencies.length > MAX_BANDS) return null;
-    const bandEirps = frequencies.length === 1 ? [composite.eirp] : frequencies.map(() => null);
-    const built = buildBands(frequencies, bandEirps, suffix.slice(frequencies.length));
+    const built = buildBands(frequencies, [], suffix.slice(frequencies.length));
     if (built === null) return null;
     bands = built;
   }
@@ -256,7 +280,7 @@ function buildRow(
       azimuth: composite.azimuth,
     },
     totalEirp,
-    bands,
+    bands: mergeDuplicateBands(bands, totalEirp),
   };
 }
 
@@ -293,31 +317,35 @@ function findRowNumberIndex(items: ExtractedPdfTextItem[], value: number, startI
   return -1;
 }
 
-function parseTableRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
-  const markerIndex = items.findIndex((item) => normalizeLabel(item.text).includes("tabela1:opisantenbadanychstacjibazowych"));
-  if (markerIndex < 0) return [];
-
-  const headerIndex = items.findIndex((item, index) => {
-    if (index <= markerIndex || normalizeLabel(item.text) !== "lp.") return false;
+function findHeaderIndex(items: ExtractedPdfTextItem[], startIndex: number, endIndex: number): number {
+  for (let index = startIndex; index < endIndex; index++) {
+    if (normalizeLabel(items[index]!.text) !== "lp.") continue;
     const headerLabels = new Set(items.slice(index, index + 20).map((entry) => normalizeLabel(entry.text)));
-    return ["azymut", "h", "eirp", "pasmo", "tilt"].every((label) => headerLabels.has(label));
-  });
-  if (headerIndex < 0) return [];
+    if (["azymut", "h", "eirp", "pasmo", "tilt"].every((label) => headerLabels.has(label))) return index;
+  }
+  return -1;
+}
 
+function parseTableRows(items: ExtractedPdfTextItem[]): SI2PEMAntennaRow[] {
+  const titleIndexes = items.flatMap((item, index) => (normalizeLabel(item.text).includes("tabela1:opisantenbadanychstacjibazowych") ? [index] : []));
   const rows: SI2PEMAntennaRow[] = [];
-  let expectedRowNumber = 1;
-  let currentRowIndex = findRowNumberIndex(items, expectedRowNumber, markerIndex + 1, headerIndex);
-  if (currentRowIndex < 0) return [];
-  const rowNumberX = items[currentRowIndex]!.x;
-  while (currentRowIndex < headerIndex) {
-    const nextRowIndex = findRowNumberIndex(items, expectedRowNumber + 1, currentRowIndex + 1, headerIndex, rowNumberX);
-    const rowEnd = nextRowIndex < 0 ? headerIndex : nextRowIndex;
-    const row = parseTableRow(expectedRowNumber, items.slice(currentRowIndex + 1, rowEnd), rows.at(-1) ?? null);
-    if (!row) return [];
-    rows.push(row);
-    if (nextRowIndex < 0) break;
-    currentRowIndex = nextRowIndex;
-    expectedRowNumber++;
+
+  for (const [position, titleIndex] of titleIndexes.entries()) {
+    const headerIndex = findHeaderIndex(items, titleIndex + 1, titleIndexes[position + 1] ?? items.length);
+    if (headerIndex < 0) continue;
+    let currentRowIndex = findRowNumberIndex(items, rows.length + 1, titleIndex + 1, headerIndex);
+    if (currentRowIndex < 0) continue;
+    const rowNumberX = items[currentRowIndex]!.x;
+    while (currentRowIndex < headerIndex) {
+      const rowNumber = rows.length + 1;
+      const nextRowIndex = findRowNumberIndex(items, rowNumber + 1, currentRowIndex + 1, headerIndex, rowNumberX);
+      const rowEnd = nextRowIndex < 0 ? headerIndex : nextRowIndex;
+      const row = parseTableRow(rowNumber, items.slice(currentRowIndex + 1, rowEnd), rows.at(-1) ?? null);
+      if (!row) return [];
+      rows.push(row);
+      if (nextRowIndex < 0) break;
+      currentRowIndex = nextRowIndex;
+    }
   }
 
   return rows;

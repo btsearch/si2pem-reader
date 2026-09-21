@@ -4,8 +4,12 @@ import test from "node:test";
 import { flattenSI2PEMAntennaRows, parseSI2PEMAntennaRows } from "../src/reports/antennaParser.ts";
 import type { ExtractedPdfTextItem } from "../src/reports/pdfText.ts";
 
-function item(text: string, y: number, x = 0): ExtractedPdfTextItem {
-  return { text, pageNumber: 1, x, y, width: 10 };
+function item(text: string, y: number, x = 0, pageNumber = 1): ExtractedPdfTextItem {
+  return { text, pageNumber, x, y, width: 10 };
+}
+
+function headerItems(pageNumber = 1): ExtractedPdfTextItem[] {
+  return ["Lp.", "Azymut", "H", "EIRP", "Pasmo", "Tilt"].map((label) => item(label, 60, 0, pageNumber));
 }
 
 function proseItem(text: string, pageNumber: number): ExtractedPdfTextItem {
@@ -233,9 +237,9 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
     item("1", 110),
     item("ASI4518R39v07", 100),
     item("Huawei", 100),
-    item("160", 90),
-    item("26,80", 90),
-    item("29635*", 90),
+    item("170", 90),
+    item("25,50", 90),
+    item("24000*", 90),
     item("800", 80),
     item("900", 78),
     item("-8,0 -", 76),
@@ -260,10 +264,10 @@ void test("parses tilt ranges with bounds above 20 degrees", () => {
       antenna: {
         model: "ASI4518R39v07",
         manufacturer: "Huawei",
-        mountedHeight: 26.8,
-        azimuth: 160,
+        mountedHeight: 25.5,
+        azimuth: 170,
       },
-      totalEirp: 29635,
+      totalEirp: 24000,
       bands: [
         {
           label: "800",
@@ -290,14 +294,14 @@ void test("parses per-band EIRP rows whose band column repeats a low azimuth val
   const items = [
     item("Tabela 1: Opis anten badanych stacji bazowych", 200),
     item("1", 110),
-    item("BT21216", 90),
+    item("ST00001", 90),
     item("RRV4-65B-R6H4VB-V2", 112),
     item("Andrew", 108),
     item("10", 110),
-    item("41,40", 110),
-    item("6673", 118),
-    item("5709", 114),
-    item("6344", 110),
+    item("40,00", 110),
+    item("6000", 118),
+    item("5000", 114),
+    item("4000", 110),
     item("10", 118),
     item("10", 114),
     item("10", 110),
@@ -320,17 +324,13 @@ void test("parses per-band EIRP rows whose band column repeats a low azimuth val
   assert.deepEqual(rows[0]?.antenna, {
     model: "RRV4-65B-R6H4VB-V2",
     manufacturer: "Andrew",
-    mountedHeight: 41.4,
+    mountedHeight: 40,
     azimuth: 10,
   });
-  assert.equal(rows[0]?.totalEirp, 18726);
+  assert.equal(rows[0]?.totalEirp, 15000);
   assert.deepEqual(
     rows[0]?.bands.map((entry) => [entry.value, entry.eirp]),
-    [
-      [10, 6673],
-      [10, 5709],
-      [10, 6344],
-    ],
+    [[10, 15000]],
   );
 });
 
@@ -340,10 +340,10 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
     item("1b", 110),
     item("AMB4520R9V06", 108),
     item("Huawei", 100),
-    item("255", 110),
-    item("58,00", 95.5),
-    item("3701", 116),
-    item("4602", 104),
+    item("250", 110),
+    item("55,00", 95.5),
+    item("3500", 116),
+    item("4500", 104),
     item("1800", 116),
     item("2600", 104),
     item("2,0 - 12,0", 116),
@@ -351,9 +351,9 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
     item("7,0", 116),
     item("7,0", 104),
     item("2b", 81),
-    item("315", 81),
-    item("3701", 87),
-    item("4602", 75),
+    item("310", 81),
+    item("3500", 87),
+    item("4500", 75),
     item("1800", 87),
     item("2600", 75),
     item("2,0 - 12,0", 87),
@@ -376,11 +376,11 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
       antenna: {
         model: "AMB4520R9V06",
         manufacturer: "Huawei",
-        mountedHeight: 58,
-        azimuth: 255,
+        mountedHeight: 55,
+        azimuth: 250,
       },
-      totalEirp: 8303,
-      bands: [band(1800, 3701), band(2600, 4602)],
+      totalEirp: 8000,
+      bands: [band(1800, 3500), band(2600, 4500)],
     },
     {
       rowNumber: 2,
@@ -388,11 +388,11 @@ void test("parses per-band EIRP row pairs sharing a merged height cell", () => {
       antenna: {
         model: "AMB4520R9V06",
         manufacturer: "Huawei",
-        mountedHeight: 58,
-        azimuth: 315,
+        mountedHeight: 55,
+        azimuth: 310,
       },
-      totalEirp: 8303,
-      bands: [band(1800, 3701), band(2600, 4602)],
+      totalEirp: 8000,
+      bands: [band(1800, 3500), band(2600, 4500)],
     },
   ]);
 });
@@ -469,12 +469,12 @@ void test("sums per-band EIRP cells into the row EIRP", () => {
     item("KRE2014022-21", 112),
     item("Ericsson", 108),
     item("0", 110),
-    item("47,10", 110),
-    item("9982", 126),
-    item("5845", 118),
-    item("6834", 110),
-    item("2846", 102),
-    item("7076", 94),
+    item("45,00", 110),
+    item("9000", 126),
+    item("5000", 118),
+    item("6000", 110),
+    item("2000", 102),
+    item("7000", 94),
     item("1800", 126),
     item("2100", 118),
     item("2600", 110),
@@ -500,22 +500,174 @@ void test("sums per-band EIRP cells into the row EIRP", () => {
 
   const rows = parseSI2PEMAntennaRows(items);
   assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.totalEirp, 32583);
+  assert.equal(rows[0]?.totalEirp, 29000);
   assert.deepEqual(
     rows[0]?.bands.map((entry) => [entry.value, entry.eirp]),
     [
-      [1800, 9982],
-      [2100, 5845],
-      [2600, 6834],
-      [700, 2846],
-      [900, 7076],
+      [1800, 9000],
+      [2100, 5000],
+      [2600, 6000],
+      [700, 2000],
+      [900, 7000],
     ],
   );
   assert.deepEqual(
     flattenSI2PEMAntennaRows(rows).map((entry) => entry.eirp),
-    [9982, 5845, 6834, 2846, 7076],
+    [9000, 5000, 6000, 2000, 7000],
   );
-  assert.ok(flattenSI2PEMAntennaRows(rows).every((entry) => entry.totalEirp === 32583));
+  assert.ok(flattenSI2PEMAntennaRows(rows).every((entry) => entry.totalEirp === 29000));
+});
+
+void test("merges repeated bands sharing one EIRP cell", () => {
+  const labels = Array.from({ length: 5 }, () => ["LTE 1800", "LTE 2100", "UMTS 900", "LTE 1800", "LTE 2100"]).flat();
+  const lineYs = labels.map((_, index) => 400 - index * 12);
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 500),
+    item("1", 256),
+    item("ATR4518R6v06", 262),
+    item("Huawei", 250),
+    item("100", 256),
+    item("32,00", 256),
+    item("18000*", 256),
+    ...labels.map((label, index) => item(label, lineYs[index]!)),
+    ...labels.map((_, index) => item("0,0 - 10,0", lineYs[index]!)),
+    ...labels.map((_, index) => item("5,0", lineYs[index]!)),
+    ...headerItems(),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.totalEirp, 18000);
+  assert.deepEqual(
+    rows[0]?.bands.map((entry) => [entry.label, entry.rat, entry.value, entry.eirp]),
+    [
+      ["LTE1800", "LTE", 1800, null],
+      ["LTE2100", "LTE", 2100, null],
+      ["UMTS900", "UMTS", 900, null],
+    ],
+  );
+});
+
+void test("gives the total EIRP to a lone band left after merging", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 200),
+    item("1", 110),
+    item("ABC-100", 112),
+    item("Kathrein", 108),
+    item("150", 110),
+    item("30,5", 110),
+    item("2000", 110),
+    item("LTE 2600", 116),
+    item("LTE 2600", 104),
+    item("0-6", 116),
+    item("0-6", 104),
+    item("4", 116),
+    item("4", 104),
+    ...headerItems(),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows[0]?.totalEirp, 2000);
+  assert.deepEqual(
+    rows[0]?.bands.map((entry) => [entry.value, entry.eirp]),
+    [[2600, 2000]],
+  );
+});
+
+void test("sums the EIRP of repeated bands listed with their own EIRP cells", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 200),
+    item("1", 110),
+    item("ABC-100", 112),
+    item("Kathrein", 108),
+    item("150", 110),
+    item("30,5", 110),
+    item("3000", 122),
+    item("2000", 110),
+    item("1500", 98),
+    item("LTE 2600", 122),
+    item("LTE 2600", 110),
+    item("LTE 800", 98),
+    item("0-6", 122),
+    item("0-6", 110),
+    item("0-6", 98),
+    item("4", 122),
+    item("4", 110),
+    item("4", 98),
+    ...headerItems(),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.totalEirp, 6500);
+  assert.deepEqual(
+    rows[0]?.bands.map((entry) => [entry.value, entry.eirp]),
+    [
+      [2600, 5000],
+      [800, 1500],
+    ],
+  );
+});
+
+void test("keeps repeated bands with different tilts separate", () => {
+  const items = [
+    item("Tabela 1: Opis anten badanych stacji bazowych", 200),
+    item("1", 110),
+    item("ABC-100", 112),
+    item("Kathrein", 108),
+    item("150", 110),
+    item("30,5", 110),
+    item("2000", 110),
+    item("LTE 1800", 116),
+    item("LTE 1800", 104),
+    item("0-6", 116),
+    item("0-6", 104),
+    item("4", 116),
+    item("6", 104),
+    ...headerItems(),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.equal(rows[0]?.totalEirp, 2000);
+  assert.deepEqual(
+    rows[0]?.bands.map((entry) => [entry.value, entry.eirp, entry.measuredTilt]),
+    [
+      [1800, null, 4],
+      [1800, null, 6],
+    ],
+  );
+});
+
+void test("parses a table continued on following pages", () => {
+  const pageItems = (pageNumber: number, title: string, rowNumber: string, azimuth: string) => [
+    item(title, 120, 0, pageNumber),
+    item(rowNumber, 110, 42, pageNumber),
+    item("ABC-100", 100, 300, pageNumber),
+    item("Kathrein", 100, 300, pageNumber),
+    item(azimuth, 90, 300, pageNumber),
+    item("30,5", 90, 300, pageNumber),
+    item("2000", 90, 300, pageNumber),
+    item("LTE1800", 80, 300, pageNumber),
+    item("0-6", 78, 300, pageNumber),
+    item("4", 76, 300, pageNumber),
+    ...headerItems(pageNumber),
+    item("Ciąg dalszy na następnej stronie", 20, 0, pageNumber),
+  ];
+  const items = [
+    ...pageItems(1, "Tabela 1: Opis anten badanych stacji bazowych", "1", "120"),
+    ...pageItems(2, "Tabela 1: Opis anten badanych stacji bazowych (c.d.)", "2", "240"),
+    ...pageItems(3, "Tabela 1: Opis anten badanych stacji bazowych (c.d.)", "3", "0"),
+  ];
+
+  const rows = parseSI2PEMAntennaRows(items);
+  assert.deepEqual(
+    rows.map((row) => [row.rowNumber, row.pageNumber, row.antenna.azimuth, row.totalEirp]),
+    [
+      [1, 1, 120, 2000],
+      [2, 2, 240, 2000],
+      [3, 3, 0, 2000],
+    ],
+  );
 });
 
 void test("parses rows whose azimuth matches the next row number", () => {
@@ -525,8 +677,8 @@ void test("parses rows whose azimuth matches the next row number", () => {
     item("AMB4520R9", 200, 160),
     item("Huawei", 200, 175),
     item("2", 190, 260),
-    item("36,70", 190, 300),
-    item("22665*", 190, 346),
+    item("35,50", 190, 300),
+    item("21000*", 190, 346),
     item("1800", 180, 411),
     item("0-6", 178, 460),
     item("4", 176, 528),
@@ -534,8 +686,8 @@ void test("parses rows whose azimuth matches the next row number", () => {
     item("AMB4520R9", 100, 160),
     item("Huawei", 100, 175),
     item("2", 90, 260),
-    item("36,70", 90, 300),
-    item("22665*", 90, 346),
+    item("35,50", 90, 300),
+    item("21000*", 90, 346),
     item("1800", 80, 411),
     item("0-6", 78, 460),
     item("4", 76, 528),
@@ -553,13 +705,13 @@ void test("parses rows whose azimuth matches the next row number", () => {
     assert.deepEqual(row.antenna, {
       model: "AMB4520R9",
       manufacturer: "Huawei",
-      mountedHeight: 36.7,
+      mountedHeight: 35.5,
       azimuth: 2,
     });
-    assert.equal(row.totalEirp, 22665);
+    assert.equal(row.totalEirp, 21000);
     assert.deepEqual(
       row.bands.map((entry) => [entry.value, entry.eirp]),
-      [[1800, 22665]],
+      [[1800, 21000]],
     );
   }
 });
